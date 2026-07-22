@@ -4,6 +4,8 @@ Panduan deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 Backend API terpisah untuk storefront IVORY. Repo ini menggunakan NestJS, Prisma, PostgreSQL, JWT dalam cookie HttpOnly, dan mempertahankan bentuk response API lama (`success`, `data`, `error`).
 
+Endpoint login juga mengembalikan `data.accessToken`. Semua endpoint terlindungi menerima `Authorization: Bearer <JWT>`; cookie `ivory_session` tetap didukung sebagai fallback untuk kompatibilitas.
+
 ## Development
 
 1. Salin `.env.example` menjadi `.env` dan isi koneksi database serta secret.
@@ -18,6 +20,8 @@ Swagger UI tersedia di `http://localhost:4000/api/docs` dan dokumen OpenAPI JSON
 Frontend harus memiliki `NEXT_PUBLIC_API_URL=http://localhost:4000/api`. Backend harus memiliki `FRONTEND_URL=http://localhost:3000`; beberapa origin dapat dipisahkan dengan koma. Untuk production, gunakan HTTPS agar cookie sesi `SameSite=None; Secure` dapat dikirim dengan `credentials: include`.
 
 Konfigurasi Auth.js lama tidak dipakai oleh backend NestJS. Gunakan `JWT_SECRET` sebagai pengganti `AUTH_SECRET`, `FRONTEND_URL` sebagai pengganti `AUTH_URL`/`NEXT_PUBLIC_APP_URL`, dan `BACKEND_PUBLIC_URL` untuk URL publik API. Variable `NEXT_PUBLIC_*` tetap hanya berada di repository frontend.
+
+Untuk request API langsung pada production, gunakan custom domain dengan induk yang sama, misalnya `shop.example.com` dan `api.example.com`, lalu set `COOKIE_DOMAIN=".example.com"`. Biarkan kosong saat frontend dan backend lokal sama-sama memakai hostname `localhost`. Domain acak `*.vercel.app` dari dua project berbeda tidak dapat berbagi cookie sesi dengan Server Components.
 
 ## Endpoint tahap pertama
 

@@ -9,7 +9,10 @@ import { AuthService } from "./auth.service";
 import type { AuthRequest } from "./auth.types";
 import { EmailRequestDto, LoginRequestDto, RegisterRequestDto, ResetPasswordRequestDto } from "../common/swagger.dto";
 
-const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "none" as const : "lax" as const, path: "/", maxAge: 30 * 24 * 60 * 60 * 1000 });
+const cookieOptions = () => {
+  const domain = process.env.COOKIE_DOMAIN?.trim();
+  return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "none" as const : "lax" as const, path: "/", maxAge: 30 * 24 * 60 * 60 * 1000, ...(domain ? { domain } : {}) };
+};
 
 @ApiTags("Authentication")
 @Controller("auth")
@@ -22,7 +25,7 @@ export class AuthController {
   async login(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const result = await this.auth.login(parseBody(this.auth.schemas.login, body));
     response.cookie(SESSION_COOKIE, result.token, cookieOptions());
-    return success({ user: result.user });
+    return success({ user: result.user, accessToken: result.token, tokenType: "Bearer" as const, expiresIn: "30d" });
   }
 
   @Post("register")
