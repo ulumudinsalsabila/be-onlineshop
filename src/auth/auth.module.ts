@@ -4,6 +4,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
 import { AuthService } from "./auth.service";
+import { EmailService } from "./email.service";
 
 function jwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -15,7 +16,7 @@ function jwtSecret() {
 @Module({
   imports: [JwtModule.register({ secret: jwtSecret(), signOptions: { expiresIn: "30d" } })],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard],
+  providers: [AuthService, AuthGuard, EmailService],
   exports: [AuthService, AuthGuard],
 })
 export class AuthModule {}

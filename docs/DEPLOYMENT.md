@@ -29,10 +29,8 @@ Memakai subdomain dari domain utama yang sama membantu kompatibilitas cookie. Pr
 | `JWT_SECRET` | Ya | Secret acak minimal 32 karakter. |
 | `FRONTEND_URL` | Ya | Origin frontend tanpa trailing slash. Beberapa origin dapat dipisahkan koma. |
 | `BACKEND_PUBLIC_URL` | Production upload | URL publik API, misalnya `https://api.example.com`. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Jika SMTP aktif | Untuk Gmail gunakan `smtp.gmail.com`, `465`, dan `true`. |
-| `SMTP_USER`, `SMTP_PASS` | Jika SMTP aktif | Alamat Gmail dan Google App Password. Jangan gunakan password login akun. |
-| `RESEND_API_KEY` | Opsional | Fallback Resend jika SMTP tidak dikonfigurasi. |
-| `EMAIL_FROM` | Jika email aktif | Pengirim dari domain yang sudah diverifikasi. |
+| `RESEND_API_KEY` | Ya | API key Resend; simpan hanya di secret manager backend. |
+| `EMAIL_FROM` | Ya | Pengirim dari domain yang sudah diverifikasi di Resend. |
 | `MIDTRANS_SERVER_KEY` | Jika Midtrans aktif | Secret server Midtrans; jangan pernah dikirim ke frontend. |
 
 Contoh:
@@ -43,17 +41,12 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/ivory_store?sslmode=require"
 JWT_SECRET="secret-acak-minimal-32-karakter"
 FRONTEND_URL="https://shop.example.com"
 BACKEND_PUBLIC_URL="https://api.example.com"
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT="465"
-SMTP_SECURE="true"
-SMTP_USER=""
-SMTP_PASS=""
-RESEND_API_KEY=""
-EMAIL_FROM="IVORY <noreply@example.com>"
+RESEND_API_KEY="re_xxxxxxxxx"
+EMAIL_FROM="IVORY <noreply@mail.example.com>"
 MIDTRANS_SERVER_KEY=""
 ```
 
-Untuk testing sementara dengan Gmail, aktifkan 2-Step Verification lalu buat App Password 16 karakter. Jika `SMTP_USER` dan `SMTP_PASS` terisi, backend memprioritaskan SMTP; jika kosong, backend memakai Resend. Gmail cocok untuk testing dengan volume rendah, bukan pengiriman production berskala besar.
+Tambahkan domain di dashboard Resend, lalu pasang record SPF dan DKIM yang diberikan. Tanpa `RESEND_API_KEY`, development hanya mencetak tautan verifikasi/reset ke log; production menolak start agar kegagalan konfigurasi tidak tersembunyi.
 
 `FRONTEND_URL` diperiksa secara exact untuk mutation request. Jangan memasukkan path atau trailing slash. Untuk staging:
 

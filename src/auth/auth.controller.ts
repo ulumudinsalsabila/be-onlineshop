@@ -40,6 +40,11 @@ export class AuthController {
   @ApiBody({ type: EmailRequestDto })
   forgotPassword(@Body() body: unknown) { return this.auth.forgotPassword(parseBody(z.object({ email: z.string().email() }), body).email).then(success); }
 
+  @Post("resend-verification")
+  @ApiOperation({ summary: "Send a new email verification link" })
+  @ApiBody({ type: EmailRequestDto })
+  resendVerification(@Body() body: unknown) { return this.auth.resendVerification(parseBody(z.object({ email: z.string().email() }), body).email).then(success); }
+
   @Post("reset-password")
   @ApiOperation({ summary: "Reset password using an emailed token" })
   @ApiBody({ type: ResetPasswordRequestDto })
