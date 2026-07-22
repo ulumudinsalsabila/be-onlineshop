@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "tsx --test src/shipping/shipping.utils.spec.ts",
+    "test": "tsx --test src/shipping/shipping.utils.spec.ts src/checkout/midtrans-status.spec.ts src/account/tracking.spec.ts",
     "build": "prisma generate && nest build",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",

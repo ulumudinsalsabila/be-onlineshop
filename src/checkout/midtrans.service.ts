@@ -128,7 +128,7 @@ export class MidtransService {
   }
 
   private async applyStatus(payload: StatusPayload, source: "notification" | "status_api") {
-    const nextStatus = localStatus(payload.transaction_status, payload.fraud_status);
+    const nextStatus = localStatus(payload.transaction_status, payload.fraud_status, payload.status_code);
     const eventKey = `midtrans:${payload.transaction_id ?? payload.order_id}:${payload.transaction_status}:${payload.status_code}`;
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({ where: { provider: "midtrans", order: { orderNumber: payload.order_id } }, include: { order: { include: { items: true } } } });
@@ -194,10 +194,11 @@ function parseStatusPayload(value: unknown): StatusPayload {
   return parsed.data;
 }
 
-function localStatus(status: string, fraudStatus?: string): LocalPaymentStatus {
+export function localStatus(status: string, fraudStatus?: string, statusCode?: string): LocalPaymentStatus {
   if (fraudStatus === "deny") return "FAILED";
   if (status === "authorize") return "AUTHORIZED";
-  if (status === "capture" || status === "settlement") return "PAID";
+  if (status === "capture") return statusCode !== undefined && statusCode !== "200" || fraudStatus !== undefined && fraudStatus !== "accept" ? "PENDING" : "PAID";
+  if (status === "settlement") return statusCode !== undefined && statusCode !== "200" ? "PENDING" : "PAID";
   if (status === "deny" || status === "failure") return "FAILED";
   if (status === "expire") return "EXPIRED";
   if (status === "cancel") return "CANCELLED";
@@ -206,7 +207,7 @@ function localStatus(status: string, fraudStatus?: string): LocalPaymentStatus {
   return "PENDING";
 }
 
-function allowedTransition(current: string, next: LocalPaymentStatus) {
+export function allowedTransition(current: string, next: LocalPaymentStatus) {
   if (current === next) return true;
   const allowed: Record<string, LocalPaymentStatus[]> = {
     PENDING: ["AUTHORIZED", "PAID", "FAILED", "EXPIRED", "CANCELLED"],

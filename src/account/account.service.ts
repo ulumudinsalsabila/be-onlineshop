@@ -4,6 +4,7 @@ import { hash, verify } from "@node-rs/argon2";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
 import { pagination, paginationMeta, type PaginationQuery } from "../common/pagination";
+import { buildTrackingEvents } from "./tracking";
 
 @Injectable()
 export class AccountService {
@@ -65,6 +66,20 @@ export class AccountService {
   async orders(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.order.findMany({ where, orderBy: { placedAt: "desc" }, include: { _count: { select: { items: true } } }, skip, take }), this.prisma.order.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
   orderByNumber(userId: string, orderNumber: string) { return this.prisma.order.findFirst({ where: { orderNumber, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
   order(userId: string, id: string) { return this.prisma.order.findFirst({ where: { id, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
+  async tracking(userId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, userId }, select: { createdAt: true, status: true, trackingNumber: true, shippedAt: true, shippingCourierCode: true, shippingCourierName: true, shippingServiceCode: true, shippingServiceName: true, payments: { where: { status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } }, orderBy: { paidAt: "desc" }, take: 1, select: { paidAt: true } }, shipments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, courier: true, service: true, trackingNumber: true, shippedAt: true, deliveredAt: true } } } });
+    if (!order) apiException(404, "ORDER_NOT_FOUND", "Pesanan tidak ditemukan.");
+    const shipment = order.shipments[0];
+    return {
+      status: shipment?.status ?? (order.status === "SHIPPED" ? "IN_TRANSIT" : order.status === "DELIVERED" ? "DELIVERED" : "PENDING"),
+      trackingNumber: order.trackingNumber ?? shipment?.trackingNumber ?? null,
+      courierCode: order.shippingCourierCode ?? shipment?.courier ?? null,
+      courierName: order.shippingCourierName ?? shipment?.courier ?? null,
+      serviceCode: order.shippingServiceCode ?? shipment?.service ?? null,
+      serviceName: order.shippingServiceName ?? shipment?.service ?? null,
+      events: buildTrackingEvents({ orderCreatedAt: order.createdAt, paidAt: order.payments[0]?.paidAt, shippedAt: order.shippedAt ?? shipment?.shippedAt, deliveredAt: shipment?.deliveredAt }),
+    };
+  }
   async returns(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.returnRequest.findMany({ where, include: { order: { select: { orderNumber: true } }, orderItem: { select: { productName: true } } }, orderBy: { requestedAt: "desc" }, skip, take }), this.prisma.returnRequest.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
 
   private async resolveRegion(input: Partial<AddressInput>) {
