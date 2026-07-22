@@ -13,8 +13,12 @@ import { SESSION_COOKIE } from "./auth/auth.guard";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
-  const allowedOrigins = frontendUrl.split(",").map((origin) => origin.trim());
+  const configuredOrigins = (process.env.FRONTEND_URL ?? "").split(",");
+  const allowedOrigins = [...new Set([
+    "http://localhost:3000",
+    "https://onlineshop-sigma.vercel.app",
+    ...configuredOrigins,
+  ].map(normalizeOrigin).filter((origin): origin is string => Boolean(origin)))];
   app.setGlobalPrefix("api");
   app.useStaticAssets(join(process.cwd(), "public", "uploads"), { prefix: "/uploads", index: false });
   app.use(cookieParser());
@@ -45,6 +49,11 @@ async function bootstrap() {
   }
   app.enableShutdownHooks();
   await app.listen(Number(process.env.PORT ?? 4000), "0.0.0.0");
+}
+
+function normalizeOrigin(value: string) {
+  try { return value.trim() ? new URL(value.trim()).origin : null; }
+  catch { return null; }
 }
 
 void bootstrap();
