@@ -31,6 +31,7 @@ export class AccountController {
   @Delete("addresses/:id") @ApiOperation({ summary: "Delete an address" }) deleteAddress(@Req() req: AuthRequest & Request, @Param("id") id: string) { return this.account.deleteAddress(this.id(req), id).then(success); }
   @Get("orders") @ApiOperation({ summary: "List the user's orders" }) @ApiQuery({ name: "page", required: false, type: Number }) @ApiQuery({ name: "limit", required: false, type: Number })
   async orders(@Req() req: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.account.orders(this.id(req), query); return success(result.items, result.meta); }
+  @Get("orders/by-number/:orderNumber") @ApiOperation({ summary: "Get an owned order by order number" }) orderByNumber(@Req() req: AuthRequest & Request, @Param("orderNumber") orderNumber: string) { return this.account.orderByNumber(this.id(req), orderNumber).then(success); }
   @Get("orders/:id") @ApiOperation({ summary: "Get an order owned by the user" }) order(@Req() req: AuthRequest & Request, @Param("id") id: string) { return this.account.order(this.id(req), id).then(success); }
   @Get("returns") @ApiOperation({ summary: "List the user's return requests" }) @ApiQuery({ name: "page", required: false, type: Number }) @ApiQuery({ name: "limit", required: false, type: Number })
   async returns(@Req() req: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.account.returns(this.id(req), query); return success(result.items, result.meta); }

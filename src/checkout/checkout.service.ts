@@ -1,8 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "../../generated/prisma/client";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
+import { MidtransService } from "./midtrans.service";
 
 type Address = { recipient: string; phone: string; line1: string; line2?: string | null; district: string; city: string; province: string; postalCode: string; country: string };
 type CheckoutInput = { addressId?: string; address?: Address; shipping: { courierCode: string; serviceCode: string }; voucherCode?: string; paymentMethod: "BANK_TRANSFER" | "CREDIT_CARD" | "E_WALLET" | "VIRTUAL_ACCOUNT"; notes?: string };
@@ -10,7 +11,7 @@ type Line = { variantId: string; productName: string; productSlug: string; sku: 
 
 @Injectable()
 export class CheckoutService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly midtrans: MidtransService) {}
 
   private async lines(userId: string) {
     const cart = await this.prisma.cart.findUnique({ where: { activeKey: `user:${userId}` }, include: { items: { include: { variant: { include: { inventory: true, product: { include: { images: { where: { isPrimary: true }, take: 1 } } } } } } } } });
@@ -71,12 +72,27 @@ export class CheckoutService {
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, phone: true } });
       const cart = await tx.cart.findUniqueOrThrow({ where: { id: selected.cart.id }, include: { items: { include: { variant: { include: { inventory: true, product: true } } } } } });
       for (const item of cart.items) { const inv = item.variant.inventory; if (!inv) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); const update = await tx.inventory.updateMany({ where: { id: inv.id, version: inv.version, quantity: { gte: inv.reserved + item.quantity } }, data: { reserved: { increment: item.quantity }, version: { increment: 1 } } }); if (update.count !== 1) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); }
-      const orderNumber = `IV-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`; const redirectUrl = `${process.env.FRONTEND_URL?.split(",")[0] ?? "http://localhost:3000"}/checkout/pending`;
-      const order = await tx.order.create({ data: { orderNumber, userId, customerEmail: user.email, customerName: user.name ?? address.recipient, customerPhone: user.phone ?? address.phone, shippingAddress: address, subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal, grandTotal: totals.grandTotal, voucherCode: voucher?.code, shippingMethod: `${shipping.courierCode}:${shipping.serviceCode}`, shippingEstimate: shipping.estimateLabel, notes: input.notes, items: { create: selected.lines.map((line) => ({ variantId: line.variantId, productName: line.productName, productSlug: line.productSlug, sku: line.sku, variantName: line.variantName, colorSnapshot: line.color, sizeSnapshot: line.size, imageUrlSnapshot: line.imageUrl, unitPrice: line.unitPrice, compareAtPrice: line.compareAtPrice, quantity: line.quantity, lineTotal: line.unitPrice.mul(line.quantity), productSnapshot: { variantId: line.variantId, sku: line.sku } })) }, payments: { create: { provider: process.env.MIDTRANS_SERVER_KEY ? "midtrans" : "mock", idempotencyKey: `checkout:${orderNumber}`, method: input.paymentMethod, amount: totals.grandTotal, redirectUrl } }, shipments: { create: { provider: shipping.provider, courier: shipping.courierCode, service: shipping.serviceCode, shippingCost: totals.shippingTotal, estimateMinDays: shipping.estimateMinDays, estimateMaxDays: shipping.estimateMaxDays, metadata: { quote: shipping } } } }, include: { payments: true } });
+      const orderNumber = `IV-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`;
+      const order = await tx.order.create({ data: { orderNumber, userId, customerEmail: user.email, customerName: user.name ?? address.recipient, customerPhone: user.phone ?? address.phone, shippingAddress: address, subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal, grandTotal: totals.grandTotal, voucherCode: voucher?.code, shippingMethod: `${shipping.courierCode}:${shipping.serviceCode}`, shippingEstimate: shipping.estimateLabel, notes: input.notes, items: { create: selected.lines.map((line) => ({ variantId: line.variantId, productName: line.productName, productSlug: line.productSlug, sku: line.sku, variantName: line.variantName, colorSnapshot: line.color, sizeSnapshot: line.size, imageUrlSnapshot: line.imageUrl, unitPrice: line.unitPrice, compareAtPrice: line.compareAtPrice, quantity: line.quantity, lineTotal: line.unitPrice.mul(line.quantity), productSnapshot: { variantId: line.variantId, sku: line.sku } })) }, payments: { create: { provider: "midtrans", idempotencyKey: `checkout:${orderNumber}`, method: input.paymentMethod, amount: totals.grandTotal } }, shipments: { create: { provider: shipping.provider, courier: shipping.courierCode, service: shipping.serviceCode, shippingCost: totals.shippingTotal, estimateMinDays: shipping.estimateMinDays, estimateMaxDays: shipping.estimateMaxDays, metadata: { quote: shipping } } } }, include: { payments: true, items: true } });
       if (voucher) { await tx.voucherUsage.create({ data: { voucherId: voucher.id, userId, orderId: order.id, discountAmount: totals.discountTotal } }); await tx.voucher.update({ where: { id: voucher.id }, data: { usedCount: { increment: 1 } } }); }
       await tx.cart.update({ where: { id: cart.id }, data: { status: "CONVERTED", activeKey: null } }); return order;
     }, { isolationLevel: "Serializable", timeout: 20_000 });
-    return { orderId: result.id, orderNumber: result.orderNumber, redirectUrl: result.payments[0]?.redirectUrl, provider: result.payments[0]?.provider };
+    try {
+      const transaction = await this.midtrans.createSnapTransaction({
+        orderNumber: result.orderNumber,
+        amount: result.grandTotal.toNumber(),
+        method: input.paymentMethod,
+        customer: { name: result.customerName, email: result.customerEmail, phone: result.customerPhone },
+        address,
+        items: result.items.map((item) => ({ sku: item.sku, name: item.productName, price: item.unitPrice.toNumber(), quantity: item.quantity })),
+        shippingTotal: result.shippingTotal.toNumber(),
+      });
+      await this.prisma.payment.update({ where: { id: result.payments[0].id }, data: { snapToken: transaction.token, redirectUrl: transaction.redirectUrl, expiresAt: transaction.expiresAt, metadata: { environment: transaction.environment } } });
+      return { orderId: result.id, orderNumber: result.orderNumber, redirectUrl: transaction.redirectUrl, snapToken: transaction.token, provider: "midtrans", environment: transaction.environment };
+    } catch (error) {
+      await this.midtrans.markCreationFailed(result.id, selected.cart.id, error instanceof HttpException ? `HTTP_${error.getStatus()}` : "MIDTRANS_CREATE_FAILED");
+      throw error;
+    }
   }
 }
 

@@ -61,6 +61,7 @@ export class AccountService {
   }
 
   async orders(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.order.findMany({ where, orderBy: { placedAt: "desc" }, include: { _count: { select: { items: true } } }, skip, take }), this.prisma.order.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
+  orderByNumber(userId: string, orderNumber: string) { return this.prisma.order.findFirst({ where: { orderNumber, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
   order(userId: string, id: string) { return this.prisma.order.findFirst({ where: { id, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
   async returns(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.returnRequest.findMany({ where, include: { order: { select: { orderNumber: true } }, orderItem: { select: { productName: true } } }, orderBy: { requestedAt: "desc" }, skip, take }), this.prisma.returnRequest.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
 }

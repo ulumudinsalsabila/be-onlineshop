@@ -35,7 +35,9 @@ Memakai subdomain dari domain utama yang sama membantu kompatibilitas cookie. Pr
 | `GMAIL_FROM_NAME` | Tidak | Nama pengirim Gmail, default `IVORY`. |
 | `RESEND_API_KEY` | Jika provider Resend | API key Resend; simpan hanya di secret manager backend. |
 | `EMAIL_FROM` | Jika provider Resend | Pengirim dari domain yang sudah diverifikasi di Resend. |
-| `MIDTRANS_SERVER_KEY` | Jika Midtrans aktif | Secret server Midtrans; jangan pernah dikirim ke frontend. |
+| `MIDTRANS_SERVER_KEY` | Ya | Server Key Midtrans untuk environment yang dipilih; jangan pernah dikirim ke frontend. |
+| `MIDTRANS_IS_PRODUCTION` | Ya | `false` untuk Sandbox, `true` untuk transaksi Production. |
+| `MIDTRANS_PAYMENT_EXPIRY_MINUTES` | Tidak | Masa berlaku pembayaran, default `60`, rentang 5–1440 menit. |
 
 Contoh:
 
@@ -50,6 +52,8 @@ GMAIL_USER="ivory.shop@gmail.com"
 GMAIL_APP_PASSWORD="app-password-16-digit"
 GMAIL_FROM_NAME="IVORY"
 MIDTRANS_SERVER_KEY=""
+MIDTRANS_IS_PRODUCTION="false"
+MIDTRANS_PAYMENT_EXPIRY_MINUTES="60"
 ```
 
 Untuk Gmail, aktifkan 2-Step Verification pada akun Google lalu buat App Password khusus aplikasi. SMTP menggunakan `smtp.gmail.com` port `465` dengan TLS. Alamat pengirim selalu mengikuti `GMAIL_USER`; `GMAIL_FROM_NAME` hanya mengubah nama tampilannya.
@@ -63,6 +67,35 @@ EMAIL_FROM="IVORY <noreply@mail.example.com>"
 ```
 
 Tambahkan domain di dashboard Resend, lalu pasang record SPF dan DKIM yang diberikan. Jika kredensial provider terpilih kosong, development hanya mencetak tautan verifikasi/reset ke log; production menolak start agar kegagalan konfigurasi tidak tersembunyi.
+
+## Midtrans Sandbox dan Production
+
+Backend memakai Snap Redirect dan hanya mempercayai status dari HTTP notification yang signature-nya valid atau Get Status API Midtrans. Tidak ada mock payment. Pilih environment dengan pasangan konfigurasi berikut:
+
+```dotenv
+# Development / Sandbox — tidak memotong dana nyata
+MIDTRANS_IS_PRODUCTION="false"
+MIDTRANS_SERVER_KEY="SB-Mid-server-xxxxxxxx"
+MIDTRANS_PAYMENT_EXPIRY_MINUTES="60"
+```
+
+```dotenv
+# Production — menerima transaksi nyata
+MIDTRANS_IS_PRODUCTION="true"
+MIDTRANS_SERVER_KEY="Mid-server-xxxxxxxx"
+MIDTRANS_PAYMENT_EXPIRY_MINUTES="60"
+```
+
+Jangan mencampur Server Key Sandbox dan Production. Setelah backend production memiliki HTTPS publik, atur URL berikut pada Midtrans MAP → Settings → Configuration:
+
+```text
+Payment Notification URL: https://api.example.com/api/payments/midtrans/notification
+Finish Redirect URL:      https://shop.example.com/checkout/pending
+Unfinish Redirect URL:    https://shop.example.com/checkout/pending
+Error Redirect URL:       https://shop.example.com/checkout/failed
+```
+
+Notification endpoint tidak memakai login karena dipanggil server Midtrans, tetapi setiap payload diverifikasi menggunakan `SHA512(order_id + status_code + gross_amount + ServerKey)`. URL notification tidak boleh localhost; untuk development gunakan tunnel HTTPS menuju port backend lokal. Tombol **Sync Midtrans status** pada frontend memanggil Get Status API sebagai rekonsiliasi jika webhook terlambat.
 
 `FRONTEND_URL` diperiksa secara exact untuk mutation request. Jangan memasukkan path atau trailing slash. Untuk staging:
 

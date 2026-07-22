@@ -23,6 +23,8 @@ Konfigurasi Auth.js lama tidak dipakai oleh backend NestJS. Gunakan `JWT_SECRET`
 
 Pengiriman email mendukung dua provider. Atur `EMAIL_PROVIDER="gmail"` untuk Gmail SMTP dengan `GMAIL_USER` dan `GMAIL_APP_PASSWORD`, atau `EMAIL_PROVIDER="resend"` dengan `RESEND_API_KEY` dan `EMAIL_FROM`. Gmail wajib memakai App Password, bukan password login akun.
 
+Payment menggunakan Midtrans Snap. Gunakan `MIDTRANS_IS_PRODUCTION="false"` dengan Sandbox Server Key untuk development dan ubah ke `true` hanya bersama Production Server Key. Webhook publiknya adalah `POST /api/payments/midtrans/notification`; status customer dapat direkonsiliasi lewat `POST /api/payments/:orderId/sync`.
+
 Untuk request API langsung pada production, gunakan custom domain dengan induk yang sama, misalnya `shop.example.com` dan `api.example.com`, lalu set `COOKIE_DOMAIN=".example.com"`. Biarkan kosong saat frontend dan backend lokal sama-sama memakai hostname `localhost`. Domain acak `*.vercel.app` dari dua project berbeda tidak dapat berbagi cookie sesi dengan Server Components.
 
 ## Endpoint tahap pertama
