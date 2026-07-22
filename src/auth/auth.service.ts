@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { hash, verify } from "@node-rs/argon2";
 import { createHash, randomBytes } from "node:crypto";
+import nodemailer from "nodemailer";
 import { z } from "zod";
 
 import { apiException } from "../common/http";
@@ -70,6 +71,17 @@ export class AuthService {
   }
 
   private async sendAuthEmail(message: { to: string; subject: string; heading: string; body: string; actionLabel: string; actionUrl: string }) {
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h1>${message.heading}</h1><p>${message.body}</p><p><a href="${message.actionUrl}">${message.actionLabel}</a></p></div>`;
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+        port: Number(process.env.SMTP_PORT ?? 465),
+        secure: (process.env.SMTP_SECURE ?? "true") === "true",
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      });
+      await transporter.sendMail({ from: process.env.EMAIL_FROM ?? process.env.SMTP_USER, to: message.to, subject: message.subject, html });
+      return;
+    }
     if (!process.env.RESEND_API_KEY) { if (process.env.NODE_ENV === "development") console.info(`[development email] ${message.subject}: ${message.actionUrl}`); return; }
     const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: process.env.EMAIL_FROM ?? "IVORY <noreply@example.com>", to: [message.to], subject: message.subject, html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h1>${message.heading}</h1><p>${message.body}</p><p><a href="${message.actionUrl}">${message.actionLabel}</a></p></div>` }) });
     if (!response.ok) throw new Error(`Email provider rejected request: ${response.status}`);
