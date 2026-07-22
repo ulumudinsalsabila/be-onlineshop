@@ -13,6 +13,7 @@
     "type-check": "prisma generate && tsc --noEmit",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "db:regions": "tsx prisma/sync-regions.ts",
     "db:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {

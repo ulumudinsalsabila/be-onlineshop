@@ -52,9 +52,10 @@ export class AddressRequestDto {
   @ApiProperty({ example: "081234567890" }) phone!: string;
   @ApiProperty({ example: "Jl. Sudirman No. 1" }) line1!: string;
   @ApiPropertyOptional() line2?: string;
-  @ApiProperty({ example: "Tanah Abang" }) district!: string;
-  @ApiProperty({ example: "Jakarta Pusat" }) city!: string;
-  @ApiProperty({ example: "DKI Jakarta" }) province!: string;
+  @ApiProperty({ example: "31" }) provinceCode!: string;
+  @ApiProperty({ example: "31.71" }) regencyCode!: string;
+  @ApiProperty({ example: "31.71.07" }) districtCode!: string;
+  @ApiProperty({ example: "31.71.07.1002" }) villageCode!: string;
   @ApiProperty({ pattern: "^\\d{5}$", example: "10220" }) postalCode!: string;
   @ApiProperty({ default: "Indonesia" }) country!: string;
   @ApiProperty({ default: false }) isDefault!: boolean;
@@ -132,4 +133,3 @@ export class SubmissionTransitionRequestDto {
 export class PayoutRequestDto {
   @ApiProperty({ type: [String], minItems: 1, maxItems: 100 }) commissionIds!: string[];
 }
-

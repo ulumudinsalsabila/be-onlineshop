@@ -214,17 +214,79 @@ model Address {
   line1      String
   line2      String?
   district   String
+  village    String?
   city       String
   province   String
+  provinceCode String?
+  regencyCode  String?
+  districtCode String?
+  villageCode  String?
   postalCode String
   country    String   @default("Indonesia")
   isDefault  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provinceRegion RegionProvince? @relation("AddressProvince", fields: [provinceCode], references: [code], onDelete: SetNull)
+  regencyRegion  RegionRegency?  @relation("AddressRegency", fields: [regencyCode], references: [code], onDelete: SetNull)
+  districtRegion RegionDistrict? @relation("AddressDistrict", fields: [districtCode], references: [code], onDelete: SetNull)
+  villageRegion  RegionVillage?  @relation("AddressVillage", fields: [villageCode], references: [code], onDelete: SetNull)
 
   @@index([userId, isDefault])
   @@index([postalCode])
+  @@index([provinceCode])
+  @@index([regencyCode])
+  @@index([districtCode])
+  @@index([villageCode])
+}
+
+model RegionProvince {
+  code       String          @id @db.VarChar(2)
+  name       String
+  regencies RegionRegency[]
+  addresses Address[]        @relation("AddressProvince")
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([name])
+}
+
+model RegionRegency {
+  code         String           @id @db.VarChar(5)
+  provinceCode String           @db.VarChar(2)
+  name         String
+  province     RegionProvince   @relation(fields: [provinceCode], references: [code], onDelete: Restrict)
+  districts    RegionDistrict[]
+  addresses    Address[]        @relation("AddressRegency")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([provinceCode, name])
+}
+
+model RegionDistrict {
+  code        String          @id @db.VarChar(8)
+  regencyCode String          @db.VarChar(5)
+  name        String
+  regency     RegionRegency   @relation(fields: [regencyCode], references: [code], onDelete: Restrict)
+  villages    RegionVillage[]
+  addresses   Address[]       @relation("AddressDistrict")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([regencyCode, name])
+}
+
+model RegionVillage {
+  code         String         @id @db.VarChar(13)
+  districtCode String         @db.VarChar(8)
+  name         String
+  district     RegionDistrict @relation(fields: [districtCode], references: [code], onDelete: Restrict)
+  addresses    Address[]      @relation("AddressVillage")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([districtCode, name])
 }
 
 model Category {

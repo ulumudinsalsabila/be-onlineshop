@@ -28,19 +28,21 @@ export class AccountService {
   async addresses(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.address.findMany({ where, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }], skip, take }), this.prisma.address.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
 
   async createAddress(userId: string, input: AddressInput) {
+    const region = await this.resolveRegion(input);
     return this.prisma.$transaction(async (tx) => {
       if (input.isDefault) await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
       const count = await tx.address.count({ where: { userId } });
-      return tx.address.create({ data: { ...input, line2: input.line2 || null, isDefault: input.isDefault || count === 0, userId } });
+      return tx.address.create({ data: { ...input, ...region, line2: input.line2 || null, isDefault: input.isDefault || count === 0, userId } });
     });
   }
 
   async updateAddress(userId: string, id: string, input: Partial<AddressInput>) {
     const existing = await this.prisma.address.findFirst({ where: { id, userId } });
     if (!existing) apiException(404, "NOT_FOUND", "Alamat tidak ditemukan.");
+    const region = await this.resolveRegion({ ...existing, ...input });
     return this.prisma.$transaction(async (tx) => {
       if (input.isDefault) await tx.address.updateMany({ where: { userId, id: { not: id } }, data: { isDefault: false } });
-      return tx.address.update({ where: { id }, data: { ...input, ...(input.line2 !== undefined ? { line2: input.line2 || null } : {}) } });
+      return tx.address.update({ where: { id }, data: { ...input, ...region, ...(input.line2 !== undefined ? { line2: input.line2 || null } : {}) } });
     });
   }
 
@@ -64,6 +66,18 @@ export class AccountService {
   orderByNumber(userId: string, orderNumber: string) { return this.prisma.order.findFirst({ where: { orderNumber, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
   order(userId: string, id: string) { return this.prisma.order.findFirst({ where: { id, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
   async returns(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.returnRequest.findMany({ where, include: { order: { select: { orderNumber: true } }, orderItem: { select: { productName: true } } }, orderBy: { requestedAt: "desc" }, skip, take }), this.prisma.returnRequest.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
+
+  private async resolveRegion(input: Partial<AddressInput>) {
+    const codes = [input.provinceCode, input.regencyCode, input.districtCode, input.villageCode];
+    if (codes.some(Boolean)) {
+      if (!codes.every(Boolean)) apiException(400, "REGION_INCOMPLETE", "Pilih provinsi, kabupaten/kota, kecamatan, dan desa/kelurahan secara lengkap.");
+      const village = await this.prisma.regionVillage.findUnique({ where: { code: input.villageCode! }, include: { district: { include: { regency: { include: { province: true } } } } } });
+      if (!village || village.districtCode !== input.districtCode || village.district.regencyCode !== input.regencyCode || village.district.regency.provinceCode !== input.provinceCode) apiException(400, "REGION_INVALID", "Hierarki wilayah alamat tidak valid.");
+      return { provinceCode: village.district.regency.provinceCode, regencyCode: village.district.regencyCode, districtCode: village.districtCode, villageCode: village.code, province: village.district.regency.province.name, city: village.district.regency.name, district: village.district.name, village: village.name };
+    }
+    if (!input.province || !input.city || !input.district) apiException(400, "REGION_INCOMPLETE", "Wilayah alamat belum lengkap.");
+    return { province: input.province, city: input.city, district: input.district, village: input.village || null, provinceCode: null, regencyCode: null, districtCode: null, villageCode: null };
+  }
 }
 
-export type AddressInput = { label: string; recipient: string; phone: string; line1: string; line2?: string; district: string; city: string; province: string; postalCode: string; country?: string; isDefault?: boolean };
+export type AddressInput = { label: string; recipient: string; phone: string; line1: string; line2?: string | null; district?: string; village?: string | null; city?: string; province?: string; provinceCode?: string | null; regencyCode?: string | null; districtCode?: string | null; villageCode?: string | null; postalCode: string; country?: string; isDefault?: boolean };

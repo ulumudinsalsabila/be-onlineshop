@@ -24,7 +24,7 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use((request: Request, response: Response, next: NextFunction) => {
     if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return next();
-    if (["/api/payments/midtrans/notification", "/api/shipments/biteship/webhook"].includes(request.path)) return next();
+    if (request.path === "/api/payments/midtrans/notification") return next();
     const origin = request.headers.origin;
     if (origin && allowedOrigins.includes(origin)) return next();
     response.status(403).json({ success: false, error: { code: "INVALID_ORIGIN", message: "Origin request tidak diizinkan." } });

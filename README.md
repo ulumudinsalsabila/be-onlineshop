@@ -13,6 +13,8 @@ Endpoint login juga mengembalikan `data.accessToken`. Semua endpoint terlindungi
 3. Jalankan `npm run db:generate`.
 4. Jalankan `npm run start:dev`.
 
+Setelah migration pertama, isi master wilayah Indonesia (provinsi sampai desa/kelurahan) dengan `npm run db:regions`. Dataset tersimpan di PostgreSQL dan dapat diperbarui ulang secara idempotent dari sumber Kepmendagri 2025.
+
 API tersedia di `http://localhost:4000/api`. Health check: `GET /api/health`.
 
 Swagger UI tersedia di `http://localhost:4000/api/docs` dan dokumen OpenAPI JSON di `http://localhost:4000/api/docs-json`. Set `SWAGGER_ENABLED="false"` untuk menonaktifkan keduanya, misalnya pada production yang tidak memerlukan dokumentasi publik.
@@ -24,8 +26,6 @@ Konfigurasi Auth.js lama tidak dipakai oleh backend NestJS. Gunakan `JWT_SECRET`
 Pengiriman email mendukung dua provider. Atur `EMAIL_PROVIDER="gmail"` untuk Gmail SMTP dengan `GMAIL_USER` dan `GMAIL_APP_PASSWORD`, atau `EMAIL_PROVIDER="resend"` dengan `RESEND_API_KEY` dan `EMAIL_FROM`. Gmail wajib memakai App Password, bukan password login akun.
 
 Payment menggunakan Midtrans Snap. Gunakan `MIDTRANS_IS_PRODUCTION="false"` dengan Sandbox Server Key untuk development dan ubah ke `true` hanya bersama Production Server Key. Webhook publiknya adalah `POST /api/payments/midtrans/notification`; status customer dapat direkonsiliasi lewat `POST /api/payments/:orderId/sync`.
-
-Shipping menggunakan Biteship Rates, Orders, Tracking, dan Webhook API. Gunakan `BITESHIP_IS_PRODUCTION="false"` bersama `BITESHIP_API_KEY_TEST` untuk development; live key hanya dipilih saat nilainya `true`. Shipment dibuat otomatis setelah pembayaran berstatus `PAID`. Webhook publiknya adalah `POST /api/shipments/biteship/webhook`, sedangkan customer dapat membaca dan menyinkronkan tracking melalui `GET /api/orders/:orderId/tracking` dan `POST /api/orders/:orderId/tracking/sync`.
 
 Untuk request API langsung pada production, gunakan custom domain dengan induk yang sama, misalnya `shop.example.com` dan `api.example.com`, lalu set `COOKIE_DOMAIN=".example.com"`. Biarkan kosong saat frontend dan backend lokal sama-sama memakai hostname `localhost`. Domain acak `*.vercel.app` dari dua project berbeda tidak dapat berbagi cookie sesi dengan Server Components.
 

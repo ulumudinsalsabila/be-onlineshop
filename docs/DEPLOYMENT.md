@@ -38,11 +38,6 @@ Memakai subdomain dari domain utama yang sama membantu kompatibilitas cookie. Pr
 | `MIDTRANS_SERVER_KEY` | Ya | Server Key Midtrans untuk environment yang dipilih; jangan pernah dikirim ke frontend. |
 | `MIDTRANS_IS_PRODUCTION` | Ya | `false` untuk Sandbox, `true` untuk transaksi Production. |
 | `MIDTRANS_PAYMENT_EXPIRY_MINUTES` | Tidak | Masa berlaku pembayaran, default `60`, rentang 5–1440 menit. |
-| `BITESHIP_IS_PRODUCTION` | Ya | `false` memilih Testing API Key, `true` memilih Live API Key. |
-| `BITESHIP_API_KEY_TEST` | Testing | Key berprefix `biteship_test.` dari dashboard Testing Mode. |
-| `BITESHIP_API_KEY_LIVE` | Production | Key berprefix `biteship_live.`; Order API production harus sudah aktif. |
-| `BITESHIP_WEBHOOK_SECRET` | Ya | Secret acak untuk autentikasi webhook Biteship. |
-| `BITESHIP_ORIGIN_*` | Ya | Kontak, alamat lengkap, dan kode pos lokasi pickup. |
 
 Contoh:
 
@@ -59,19 +54,6 @@ GMAIL_FROM_NAME="IVORY"
 MIDTRANS_SERVER_KEY=""
 MIDTRANS_IS_PRODUCTION="false"
 MIDTRANS_PAYMENT_EXPIRY_MINUTES="60"
-BITESHIP_IS_PRODUCTION="false"
-BITESHIP_API_KEY_TEST="biteship_test.xxxxxxxx"
-BITESHIP_API_KEY_LIVE=""
-BITESHIP_WEBHOOK_SECRET="secret-acak-minimal-32-karakter"
-BITESHIP_SHIPPER_NAME="IVORY"
-BITESHIP_SHIPPER_PHONE="081234567890"
-BITESHIP_SHIPPER_EMAIL="warehouse@example.com"
-BITESHIP_SHIPPER_ORGANIZATION="IVORY"
-BITESHIP_ORIGIN_CONTACT_NAME="IVORY Warehouse"
-BITESHIP_ORIGIN_CONTACT_PHONE="081234567890"
-BITESHIP_ORIGIN_CONTACT_EMAIL="warehouse@example.com"
-BITESHIP_ORIGIN_ADDRESS="Alamat lengkap warehouse"
-BITESHIP_ORIGIN_POSTAL_CODE="12950"
 ```
 
 Untuk Gmail, aktifkan 2-Step Verification pada akun Google lalu buat App Password khusus aplikasi. SMTP menggunakan `smtp.gmail.com` port `465` dengan TLS. Alamat pengirim selalu mengikuti `GMAIL_USER`; `GMAIL_FROM_NAME` hanya mengubah nama tampilannya.
@@ -115,36 +97,6 @@ Error Redirect URL:       https://shop.example.com/checkout/failed
 
 Notification endpoint tidak memakai login karena dipanggil server Midtrans, tetapi setiap payload diverifikasi menggunakan `SHA512(order_id + status_code + gross_amount + ServerKey)`. URL notification tidak boleh localhost; untuk development gunakan tunnel HTTPS menuju port backend lokal. Tombol **Sync Midtrans status** pada frontend memanggil Get Status API sebagai rekonsiliasi jika webhook terlambat.
 
-## Biteship Testing dan Production
-
-Biteship memakai base URL yang sama (`https://api.biteship.com/v1`) untuk kedua mode; API key menentukan apakah request masuk Testing atau Production. Backend menolak start bila prefix key tidak sesuai dengan `BITESHIP_IS_PRODUCTION`, sehingga test key tidak dapat membuat shipment nyata secara tidak sengaja.
-
-```dotenv
-# Development / Testing — Order API disimulasikan
-BITESHIP_IS_PRODUCTION="false"
-BITESHIP_API_KEY_TEST="biteship_test.xxxxxxxx"
-BITESHIP_API_KEY_LIVE=""
-```
-
-```dotenv
-# Production — courier dan pickup nyata
-BITESHIP_IS_PRODUCTION="true"
-BITESHIP_API_KEY_TEST=""
-BITESHIP_API_KEY_LIVE="biteship_live.xxxxxxxx"
-```
-
-Di Biteship Dashboard → Integrations, tambahkan webhook berikut dan aktifkan event `order.status`, `order.waybill_id`, dan `order.price`:
-
-```text
-https://api.example.com/api/shipments/biteship/webhook
-```
-
-Konfigurasikan autentikasi webhook dengan nilai yang sama seperti `BITESHIP_WEBHOOK_SECRET`, baik sebagai header `x-biteship-webhook-secret` atau `Authorization: Bearer <secret>`. Endpoint tidak memakai JWT customer, tetapi menolak payload tanpa secret tersebut.
-
-Tarif checkout diambil dari `POST /v1/rates/couriers`. Setelah Midtrans mengonfirmasi pembayaran `PAID`, backend otomatis membuat Biteship Order. Webhook memperbarui status dan nomor resi di database secara real-time; frontend membaca state backend setiap 15 detik. Tombol **Sync now** memanggil Tracking API sebagai rekonsiliasi manual—hindari polling langsung ke Biteship karena Tracking API dapat dihitung sebagai usage, termasuk pada sandbox.
-
-Sebelum go-live, aktifkan Order API production di dashboard Biteship, pastikan saldo mencukupi, ganti ke live key, dan lakukan satu pengiriman nyata dengan nominal kecil. Testing key membuat order simulasi dan tidak memanggil kurir.
-
 `FRONTEND_URL` diperiksa secara exact untuk mutation request. Jangan memasukkan path atau trailing slash. Untuk staging:
 
 ```dotenv
@@ -169,7 +121,10 @@ Migration tidak boleh dijalankan dari setiap instance aplikasi. Jalankan satu ka
 ```bash
 npm ci
 npm run db:migrate:deploy
+npm run db:regions
 ```
+
+`db:regions` melakukan upsert master wilayah Indonesia dari provinsi sampai desa/kelurahan setelah migration region tersedia. Source default mengikuti dataset kode wilayah Kepmendagri 2025 dan dapat dioverride melalui `REGION_DATA_URL`; request address tetap membaca PostgreSQL dan tidak bergantung pada source eksternal saat runtime.
 
 Gunakan direct database URL untuk migration apabila penyedia membedakan URL direct dan pooled. Jangan menjalankan seed development pada production. Backup database sebelum migration yang destruktif.
 
@@ -244,7 +199,7 @@ Sebelum memakai beberapa instance atau platform ephemeral, pindahkan upload ke o
 
 1. Siapkan PostgreSQL, backup, domain API, dan HTTPS.
 2. Isi secret backend.
-3. Jalankan migration production satu kali.
+3. Jalankan migration production satu kali, lalu `npm run db:regions` untuk master wilayah.
 4. Deploy backend.
 5. Pastikan `/api/health` dan `/api/products` berhasil.
 6. Deploy frontend dengan `NEXT_PUBLIC_API_URL` yang menunjuk API ini.
