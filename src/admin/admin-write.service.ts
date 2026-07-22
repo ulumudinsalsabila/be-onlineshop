@@ -1,4 +1,8 @@
 import { Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
 import { z } from "zod";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
@@ -27,6 +31,42 @@ export class AdminWriteService {
 
   private audit(actorId: string, action: string, entityType: string, entityId?: string) {
     return this.prisma.auditLog.create({ data: { userId: actorId, action, entityType, entityId } });
+  }
+
+  async uploadProductImage(actorId: string, file: { buffer: Buffer; mimetype: string; size: number; originalname: string }) {
+    const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+    const extension = extensions[file.mimetype];
+    if (!extension) apiException(415, "UNSUPPORTED_IMAGE", "Format gambar harus JPEG, PNG, atau WebP.");
+    if (!file.buffer?.length || file.size < 1) apiException(400, "EMPTY_IMAGE", "File gambar kosong.");
+    if (file.size > 4 * 1024 * 1024) apiException(413, "IMAGE_TOO_LARGE", "Ukuran gambar maksimal 4 MB.");
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+    const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+    const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+    let result: { url: string; width: number; height: number; storageKey: string };
+
+    if (cloudName && apiKey && apiSecret) {
+      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
+      const uploaded = await new Promise<UploadApiResponse>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "ivory/products", resource_type: "image", unique_filename: true },
+          (error, response) => error || !response ? reject(error instanceof Error ? error : new Error("Cloudinary tidak mengembalikan hasil upload.")) : resolve(response),
+        );
+        stream.end(file.buffer);
+      }).catch(() => apiException(502, "IMAGE_UPLOAD_FAILED", "Gambar gagal diunggah ke penyimpanan."));
+      result = { url: uploaded.secure_url, width: uploaded.width, height: uploaded.height, storageKey: uploaded.public_id };
+    } else {
+      if (process.env.NODE_ENV === "production") apiException(503, "IMAGE_STORAGE_NOT_CONFIGURED", "Konfigurasi Cloudinary belum tersedia di server.");
+      const filename = `${randomUUID()}.${extension}`;
+      const directory = join(process.cwd(), "public", "uploads", "products");
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, filename), file.buffer);
+      const backendUrl = (process.env.BACKEND_PUBLIC_URL || "http://localhost:4000").replace(/\/$/, "");
+      result = { url: `${backendUrl}/uploads/products/${filename}`, width: 1200, height: 1500, storageKey: `products/${filename}` };
+    }
+
+    await this.audit(actorId, "UPLOAD", "product-images", result.storageKey);
+    return result;
   }
 
   async entity(actorId: string, entity: string, body: unknown, id?: string) {

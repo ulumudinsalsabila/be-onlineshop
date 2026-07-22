@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { Request } from "express";
 import type { AuthRequest } from "../auth/auth.types";
 import { apiException, success } from "../common/http";
@@ -28,6 +29,18 @@ export class AdminController {
 
   @Post("products") @ApiOperation({ summary: "Create a product including images, variants, and inventory" })
   createProduct(@Req() req: AuthRequest & Request, @Body() body: unknown) { return this.write.product(this.actor(req), body).then(success); }
+  @Post("products/images")
+  @ApiOperation({ summary: "Upload a product image" })
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({ schema: { type: "object", required: ["image"], properties: { image: { type: "string", format: "binary" } } } })
+  @UseInterceptors(FileInterceptor("image", { limits: { files: 1, fileSize: 4 * 1024 * 1024 } }))
+  uploadProductImage(
+    @Req() req: AuthRequest & Request,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    if (!file) apiException(400, "IMAGE_REQUIRED", "Pilih file gambar yang akan diunggah.");
+    return this.write.uploadProductImage(this.actor(req), file).then(success);
+  }
   @Patch("products/:id") @ApiOperation({ summary: "Update a product including images, variants, and inventory" })
   updateProduct(@Req() req: AuthRequest & Request, @Param("id") id: string, @Body() body: unknown) { return this.write.product(this.actor(req), body, id).then(success); }
   @Patch("customers/:id") @ApiOperation({ summary: "Update user role, activation, and email verification" })
