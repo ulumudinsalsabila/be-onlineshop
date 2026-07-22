@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { Request } from "express";
 import { z } from "zod";
 
@@ -47,7 +47,9 @@ export class CommerceController {
 
   @Get("wishlist")
   @ApiOperation({ summary: "Get the authenticated user's wishlist" })
-  async wishlist(@Req() request: AuthRequest & Request) { return success(await this.commerce.wishlist(request.user!.id)); }
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "limit", required: false, type: Number })
+  async wishlist(@Req() request: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.commerce.wishlist(request.user!.id, query); return success(result.items, result.meta); }
 
   @Post("wishlist")
   @ApiOperation({ summary: "Add a product to the wishlist" })

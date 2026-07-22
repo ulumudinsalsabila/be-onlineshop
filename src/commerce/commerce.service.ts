@@ -4,6 +4,7 @@ import type { Prisma } from "../../generated/prisma/client";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
 import { mapProduct, productInclude } from "../products/product.mapper";
+import { pagination, paginationMeta, type PaginationQuery } from "../common/pagination";
 
 const cartInclude = {
   items: { orderBy: { createdAt: "asc" as const }, include: { variant: { include: { inventory: true, product: { include: { brand: true, images: { orderBy: { sortOrder: "asc" as const }, take: 1 } } } } } } },
@@ -58,9 +59,13 @@ export class CommerceService {
     return { removed: true };
   }
 
-  async wishlist(userId: string) {
-    const wishlist = await this.prisma.wishlist.findUnique({ where: { userId }, include: { items: { orderBy: { createdAt: "desc" }, include: { product: { include: productInclude } } } } });
-    return { id: wishlist?.id ?? null, items: wishlist?.items.map((item) => ({ id: item.id, product: mapProduct(item.product), createdAt: item.createdAt })) ?? [] };
+  async wishlist(userId: string, query: PaginationQuery) {
+    const { page, pageSize, skip, take } = pagination(query);
+    const wishlist = await this.prisma.wishlist.findUnique({ where: { userId }, select: { id: true } });
+    if (!wishlist) return { items: [], meta: paginationMeta(0, page, pageSize) };
+    const where = { wishlistId: wishlist.id };
+    const [records, total] = await this.prisma.$transaction([this.prisma.wishlistItem.findMany({ where, orderBy: { createdAt: "desc" }, include: { product: { include: productInclude } }, skip, take }), this.prisma.wishlistItem.count({ where })]);
+    return { items: records.map((item) => ({ id: item.id, product: mapProduct(item.product), createdAt: item.createdAt })), meta: paginationMeta(total, page, pageSize) };
   }
 
   async addWishlistItem(userId: string, productId: string) {

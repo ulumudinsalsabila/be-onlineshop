@@ -3,8 +3,7 @@ import type { Prisma } from "../../generated/prisma/client";
 
 import { PrismaService } from "../common/prisma.service";
 import { mapProduct, mapProductDetail, productInclude } from "./product.mapper";
-
-const PAGE_SIZE = 12;
+import { pagination, paginationMeta } from "../common/pagination";
 
 type ProductQuery = Record<string, string | string[] | undefined>;
 
@@ -26,7 +25,7 @@ export class ProductsService {
     const categories = list(query.category);
     const brands = list(query.brand);
     const conditions = list(query.condition).map((item) => item.toUpperCase()).filter((item): item is "NEW" | "PRELOVED" => item === "NEW" || item === "PRELOVED");
-    const page = Math.max(1, Math.min(999, Number(first(query.page)) || 1));
+    const { page, pageSize, skip, take } = pagination(query, 12, 48);
     const minPrice = Math.max(0, Number(first(query.minPrice)) || 0);
     const maxPrice = Math.max(minPrice, Number(first(query.maxPrice)) || 1_000_000_000);
     const where: Prisma.ProductWhereInput = {
@@ -44,9 +43,9 @@ export class ProductsService {
     const orderBy: Prisma.ProductOrderByWithRelationInput = first(query.sort) === "price-asc" ? { price: "asc" } : first(query.sort) === "price-desc" ? { price: "desc" } : { createdAt: "desc" };
     const [total, records] = await this.prisma.$transaction([
       this.prisma.product.count({ where }),
-      this.prisma.product.findMany({ where, include: productInclude, orderBy, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+      this.prisma.product.findMany({ where, include: productInclude, orderBy, skip, take }),
     ]);
-    return { items: records.map(mapProduct), total, page, pageSize: PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+    return { items: records.map(mapProduct), ...paginationMeta(total, page, pageSize) };
   }
 
   async bySlug(slug: string) {

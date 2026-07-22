@@ -3,6 +3,7 @@ import { hash, verify } from "@node-rs/argon2";
 
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
+import { pagination, paginationMeta, type PaginationQuery } from "../common/pagination";
 
 @Injectable()
 export class AccountService {
@@ -24,7 +25,7 @@ export class AccountService {
     return { message: "Password berhasil diperbarui." };
   }
 
-  addresses(userId: string) { return this.prisma.address.findMany({ where: { userId }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] }); }
+  async addresses(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.address.findMany({ where, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }], skip, take }), this.prisma.address.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
 
   async createAddress(userId: string, input: AddressInput) {
     return this.prisma.$transaction(async (tx) => {
@@ -59,9 +60,9 @@ export class AccountService {
     return { user, orders, addresses, wishlist };
   }
 
-  orders(userId: string) { return this.prisma.order.findMany({ where: { userId }, orderBy: { placedAt: "desc" }, include: { _count: { select: { items: true } } } }); }
+  async orders(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.order.findMany({ where, orderBy: { placedAt: "desc" }, include: { _count: { select: { items: true } } }, skip, take }), this.prisma.order.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
   order(userId: string, id: string) { return this.prisma.order.findFirst({ where: { id, userId }, include: { items: true, payments: { orderBy: { createdAt: "desc" } }, shipments: { orderBy: { createdAt: "desc" } } } }); }
-  returns(userId: string) { return this.prisma.returnRequest.findMany({ where: { userId }, include: { order: { select: { orderNumber: true } }, orderItem: { select: { productName: true } } }, orderBy: { requestedAt: "desc" } }); }
+  async returns(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.returnRequest.findMany({ where, include: { order: { select: { orderNumber: true } }, orderItem: { select: { productName: true } } }, orderBy: { requestedAt: "desc" }, skip, take }), this.prisma.returnRequest.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }
 }
 
 export type AddressInput = { label: string; recipient: string; phone: string; line1: string; line2?: string; district: string; city: string; province: string; postalCode: string; country?: string; isDefault?: boolean };

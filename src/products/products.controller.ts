@@ -19,7 +19,8 @@ export class ProductsController {
   @ApiQuery({ name: "sort", required: false })
   async list(@Query() query: Record<string, string | string[] | undefined>) {
     const result = await this.products.list(query);
-    return success(result.items, { total: result.total, page: result.page, pageSize: result.pageSize, totalPages: result.totalPages });
+    const { items, ...meta } = result;
+    return success(items, meta);
   }
 
   @Get("products/:slug")

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { Request } from "express";
 import type { AuthRequest } from "../auth/auth.types";
 import { apiException, success } from "../common/http";
@@ -15,7 +15,7 @@ export class AdminController {
   private actor(request: AuthRequest & Request) { if (request.user?.role !== "ADMIN") apiException(403, "ADMIN_REQUIRED", "Hanya role ADMIN yang dapat mengubah data."); return request.user.id; }
   private read(request: AuthRequest & Request, resource: string) { if (request.user?.role === "ADMIN") return; const staffResources = new Set(["layout", "dashboard", "search", "options", "products", "orders", "customers", "categories", "brands", "content", "inventory", "shipments"]); if (!staffResources.has(resource)) apiException(403, "FORBIDDEN", "Role ini tidak memiliki izin untuk resource admin tersebut."); }
 
-  @Get("views/:view") @ApiOperation({ summary: "Get an admin dashboard data view" })
+  @Get("views/:view") @ApiOperation({ summary: "Get an admin dashboard data view" }) @ApiQuery({ name: "page", required: false, type: Number, description: "Page number for table views; 10 records per page" })
   view(@Req() req: AuthRequest & Request, @Param("view") view: string, @Query() query: Record<string, string | undefined>) { this.read(req, view); return this.admin.view(view, query).then(success); }
   @Get("details/:resource/:id") @ApiOperation({ summary: "Get an admin resource detail" })
   detail(@Req() req: AuthRequest & Request, @Param("resource") resource: string, @Param("id") id: string) { this.read(req, resource); return this.admin.detail(resource, id).then(success); }

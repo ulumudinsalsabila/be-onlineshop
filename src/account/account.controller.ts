@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { Request } from "express";
 import { z } from "zod";
 
@@ -24,11 +24,14 @@ export class AccountController {
   @Patch("account/profile") @ApiOperation({ summary: "Update account profile" }) @ApiBody({ type: UpdateProfileRequestDto }) updateProfile(@Req() req: AuthRequest & Request, @Body() body: unknown) { return this.account.updateProfile(this.id(req), parseBody(z.object({ name: z.string().trim().min(2).max(80), phone: z.string().trim().max(20).optional().or(z.literal("")) }), body)).then(success); }
   @Patch("account/security") @ApiOperation({ summary: "Change account password" }) @ApiBody({ type: UpdatePasswordRequestDto }) updatePassword(@Req() req: AuthRequest & Request, @Body() body: unknown) { return this.account.updatePassword(this.id(req), parseBody(z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/), confirmPassword: z.string() }), body)).then(success); }
   @Get("account/overview") @ApiOperation({ summary: "Get account overview counters" }) overview(@Req() req: AuthRequest & Request) { return this.account.overview(this.id(req)).then(success); }
-  @Get("addresses") @ApiOperation({ summary: "List saved addresses" }) addresses(@Req() req: AuthRequest & Request) { return this.account.addresses(this.id(req)).then(success); }
+  @Get("addresses") @ApiOperation({ summary: "List saved addresses" }) @ApiQuery({ name: "page", required: false, type: Number }) @ApiQuery({ name: "limit", required: false, type: Number })
+  async addresses(@Req() req: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.account.addresses(this.id(req), query); return success(result.items, result.meta); }
   @Post("addresses") @ApiOperation({ summary: "Create an address" }) @ApiBody({ type: AddressRequestDto }) createAddress(@Req() req: AuthRequest & Request, @Body() body: unknown) { return this.account.createAddress(this.id(req), parseBody(addressSchema, body)).then(success); }
   @Patch("addresses/:id") @ApiOperation({ summary: "Update an address" }) @ApiBody({ type: AddressRequestDto }) updateAddress(@Req() req: AuthRequest & Request, @Param("id") id: string, @Body() body: unknown) { return this.account.updateAddress(this.id(req), id, parseBody(addressSchema.partial(), body)).then(success); }
   @Delete("addresses/:id") @ApiOperation({ summary: "Delete an address" }) deleteAddress(@Req() req: AuthRequest & Request, @Param("id") id: string) { return this.account.deleteAddress(this.id(req), id).then(success); }
-  @Get("orders") @ApiOperation({ summary: "List the user's orders" }) orders(@Req() req: AuthRequest & Request) { return this.account.orders(this.id(req)).then(success); }
+  @Get("orders") @ApiOperation({ summary: "List the user's orders" }) @ApiQuery({ name: "page", required: false, type: Number }) @ApiQuery({ name: "limit", required: false, type: Number })
+  async orders(@Req() req: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.account.orders(this.id(req), query); return success(result.items, result.meta); }
   @Get("orders/:id") @ApiOperation({ summary: "Get an order owned by the user" }) order(@Req() req: AuthRequest & Request, @Param("id") id: string) { return this.account.order(this.id(req), id).then(success); }
-  @Get("returns") @ApiOperation({ summary: "List the user's return requests" }) returns(@Req() req: AuthRequest & Request) { return this.account.returns(this.id(req)).then(success); }
+  @Get("returns") @ApiOperation({ summary: "List the user's return requests" }) @ApiQuery({ name: "page", required: false, type: Number }) @ApiQuery({ name: "limit", required: false, type: Number })
+  async returns(@Req() req: AuthRequest & Request, @Query() query: Record<string, string | undefined>) { const result = await this.account.returns(this.id(req), query); return success(result.items, result.meta); }
 }
