@@ -44,7 +44,7 @@ export function normalizeRates(payload: unknown): ShippingRate[] {
     if (!row || cost === null || cost < 0 || !courierCode || !serviceCode) return [];
     const etd = text(row.etd); const days = etd.match(/(\d+)(?:\s*-\s*(\d+))?/);
     const min = days ? Number(days[1]) : null; const max = days ? Number(days[2] ?? days[1]) : null;
-    return [{ provider: "rajaongkir" as const, courierCode, courierName: text(row.name) || courierCode.toUpperCase(), serviceCode, serviceName: serviceCode, description: text(row.description), cost: Math.round(cost), etd, estimateLabel: etd || "Estimasi tidak tersedia", estimateMinDays: min, estimateMaxDays: max }];
+    return [{ provider: "rajaongkir" as const, courierCode, courierName: text(row.name) || courierCode.toUpperCase(), serviceCode, serviceName: serviceCode, description: text(row.description), cost: Math.round(cost), etd, estimateLabel: etd || "Estimate unavailable", estimateMinDays: min, estimateMaxDays: max }];
   });
 }
 

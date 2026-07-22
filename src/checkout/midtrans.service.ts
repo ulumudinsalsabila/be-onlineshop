@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { Prisma } from "../../generated/prisma/client";
-import { apiException } from "../common/http";
+import { apiException, englishApiMessage } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
 
 type PaymentMethod = "BANK_TRANSFER" | "CREDIT_CARD" | "E_WALLET" | "VIRTUAL_ACCOUNT";
@@ -173,7 +173,7 @@ export class MidtransService {
     if (!response.ok) {
       const details = providerErrorDetails(body, response.status, this.production);
       this.logger.error(`Midtrans API rejected request: ${JSON.stringify(details)}`);
-      throw new HttpException({ success: false, error: { code: "MIDTRANS_REQUEST_FAILED", message: "Midtrans menolak permintaan pembayaran.", details } }, 502);
+      throw new HttpException({ success: false, error: { code: "MIDTRANS_REQUEST_FAILED", message: "Midtrans rejected the payment request.", details } }, 502);
     }
     return body;
   }
@@ -184,7 +184,7 @@ export class MidtransService {
   }
 
   private providerException(status: number, code: string, message: string): never {
-    throw new HttpException({ success: false, error: { code, message, details: { provider: "midtrans", environment: this.production ? "production" : "sandbox" } } }, status);
+    throw new HttpException({ success: false, error: { code, message: englishApiMessage(code, message), details: { provider: "midtrans", environment: this.production ? "production" : "sandbox" } } }, status);
   }
 }
 

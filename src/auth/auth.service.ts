@@ -46,7 +46,7 @@ export class AuthService {
       const raw = randomBytes(32).toString("base64url");
       await this.prisma.verificationToken.deleteMany({ where: { identifier: `reset:${user.email}` } });
       await this.prisma.verificationToken.create({ data: { identifier: `reset:${user.email}`, token: createHash("sha256").update(raw).digest("hex"), expires: new Date(Date.now() + 60 * 60_000) } });
-      await this.email.sendAuthEmail({ to: user.email, subject: "Reset password IVORY", heading: "Atur ulang password", body: "Gunakan tautan aman berikut untuk membuat password baru. Tautan berlaku selama 1 jam.", actionLabel: "Atur ulang password", actionUrl: this.frontendUrl("/reset-password", user.email, raw) });
+      await this.email.sendAuthEmail({ to: user.email, subject: "Reset your IVORY password", heading: "Reset your password", body: "Use the secure link below to create a new password. The link is valid for one hour.", actionLabel: "Reset password", actionUrl: this.frontendUrl("/reset-password", user.email, raw) });
     }
     return { message: "If the account exists, a reset link has been sent." };
   }
@@ -58,7 +58,7 @@ export class AuthService {
     const record = await this.prisma.verificationToken.findFirst({ where: { identifier: `reset:${email}`, token: digest, expires: { gt: new Date() } } });
     if (!record) apiException(400, "INVALID_TOKEN", "Reset link tidak valid atau sudah kedaluwarsa.");
     await this.prisma.$transaction([this.prisma.user.update({ where: { email }, data: { passwordHash: await hash(input.password, { algorithm: 2, memoryCost: 19_456, timeCost: 3, parallelism: 1, outputLen: 32 }) } }), this.prisma.verificationToken.deleteMany({ where: { identifier: `reset:${email}` } })]);
-    return { message: "Password berhasil diperbarui." };
+    return { message: "Your password has been updated." };
   }
 
   async verifyEmail(email: string, rawToken: string) {
@@ -74,7 +74,7 @@ export class AuthService {
     const normalized = email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({ where: { email: normalized, emailVerified: null, isActive: true, deletedAt: null }, select: { email: true } });
     if (user) await this.sendVerificationEmail(user.email);
-    return { message: "Jika akun tersedia dan belum terverifikasi, email verifikasi telah dikirim." };
+    return { message: "If the account exists and is not verified, a verification email has been sent." };
   }
 
   private async sendVerificationEmail(email: string) {
@@ -84,7 +84,7 @@ export class AuthService {
       this.prisma.verificationToken.deleteMany({ where: { identifier } }),
       this.prisma.verificationToken.create({ data: { identifier, token: createHash("sha256").update(raw).digest("hex"), expires: new Date(Date.now() + 24 * 60 * 60_000) } }),
     ]);
-    await this.email.sendAuthEmail({ to: email, subject: "Verifikasi akun IVORY", heading: "Verifikasi email Anda", body: "Konfirmasi alamat email untuk mengaktifkan akun IVORY. Tautan berlaku selama 24 jam.", actionLabel: "Verifikasi email", actionUrl: this.frontendUrl("/verify-email", email, raw) });
+    await this.email.sendAuthEmail({ to: email, subject: "Verify your IVORY account", heading: "Verify your email", body: "Confirm your email address to activate your IVORY account. The link is valid for 24 hours.", actionLabel: "Verify email", actionUrl: this.frontendUrl("/verify-email", email, raw) });
   }
 
   private frontendUrl(path: string, email: string, token: string) {

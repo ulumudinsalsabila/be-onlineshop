@@ -27,7 +27,7 @@ export class ProductsController {
   @ApiOperation({ summary: "Get a product by slug" })
   async detail(@Param("slug") slug: string) {
     const product = await this.products.bySlug(slug);
-    if (!product) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "Produk tidak ditemukan." } });
+    if (!product) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "The product was not found." } });
     return success(product);
   }
 
@@ -41,7 +41,7 @@ export class ProductsController {
   @ApiOperation({ summary: "Get category metadata by slug" })
   async category(@Param("slug") slug: string) {
     const category = await this.products.category(slug);
-    if (!category) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "Kategori tidak ditemukan." } });
+    if (!category) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "The category was not found." } });
     return success(category);
   }
 
@@ -49,7 +49,7 @@ export class ProductsController {
   @ApiOperation({ summary: "Get brand metadata by slug" })
   async brand(@Param("slug") slug: string) {
     const brand = await this.products.brand(slug);
-    if (!brand) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "Brand tidak ditemukan." } });
+    if (!brand) throw new NotFoundException({ success: false, error: { code: "NOT_FOUND", message: "The brand was not found." } });
     return success(brand);
   }
 

@@ -27,7 +27,7 @@ async function bootstrap() {
     if (request.path === "/api/payments/midtrans/notification") return next();
     const origin = request.headers.origin;
     if (origin && allowedOrigins.includes(origin)) return next();
-    response.status(403).json({ success: false, error: { code: "INVALID_ORIGIN", message: "Origin request tidak diizinkan." } });
+    response.status(403).json({ success: false, error: { code: "INVALID_ORIGIN", message: "The request origin is not allowed." } });
   });
   app.enableCors({ origin: allowedOrigins, credentials: true });
   if (process.env.SWAGGER_ENABLED !== "false") {

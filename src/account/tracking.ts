@@ -6,9 +6,9 @@ export function buildTrackingEvents(input: {
   shippedAt?: Date | null;
   deliveredAt?: Date | null;
 }): TrackingEvent[] {
-  const events: TrackingEvent[] = [{ status: "ORDER_PLACED", note: "Pesanan telah dibuat.", occurredAt: input.orderCreatedAt }];
-  if (input.paidAt) events.push({ status: "PAYMENT_CONFIRMED", note: "Pembayaran telah dikonfirmasi.", occurredAt: input.paidAt });
-  if (input.shippedAt) events.push({ status: "SHIPPED", note: "Pesanan telah diserahkan kepada kurir.", occurredAt: input.shippedAt });
-  if (input.deliveredAt) events.push({ status: "DELIVERED", note: "Pesanan telah diterima.", occurredAt: input.deliveredAt });
+  const events: TrackingEvent[] = [{ status: "ORDER_PLACED", note: "The order has been placed.", occurredAt: input.orderCreatedAt }];
+  if (input.paidAt) events.push({ status: "PAYMENT_CONFIRMED", note: "Payment has been confirmed.", occurredAt: input.paidAt });
+  if (input.shippedAt) events.push({ status: "SHIPPED", note: "The order has been handed to the courier.", occurredAt: input.shippedAt });
+  if (input.deliveredAt) events.push({ status: "DELIVERED", note: "The order has been delivered.", occurredAt: input.deliveredAt });
   return events.sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime());
 }

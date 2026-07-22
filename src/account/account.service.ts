@@ -23,7 +23,7 @@ export class AccountService {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
     if (!user?.passwordHash || !(await verify(user.passwordHash, input.currentPassword))) apiException(400, "INVALID_PASSWORD", "Password saat ini tidak sesuai.");
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await hash(input.newPassword, { algorithm: 2, memoryCost: 19_456, timeCost: 3, parallelism: 1, outputLen: 32 }) } });
-    return { message: "Password berhasil diperbarui." };
+    return { message: "Your password has been updated." };
   }
 
   async addresses(userId: string, query: PaginationQuery) { const { page, pageSize, skip, take } = pagination(query); const where = { userId }; const [items, total] = await this.prisma.$transaction([this.prisma.address.findMany({ where, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }], skip, take }), this.prisma.address.count({ where })]); return { items, meta: paginationMeta(total, page, pageSize) }; }

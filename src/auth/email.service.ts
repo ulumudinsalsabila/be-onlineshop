@@ -78,7 +78,7 @@ export class EmailService {
       to: [message.to],
       subject: message.subject,
       text: `${message.heading}\n\n${message.body}\n\n${message.actionUrl}`,
-      html: `<div style="background:#f5f1e8;padding:40px 16px;font-family:Arial,sans-serif;color:#29251f"><div style="max-width:560px;margin:auto;background:#fff;padding:36px;border:1px solid #ded9cf"><p style="font-size:12px;letter-spacing:.2em;margin:0 0 24px">IVORY</p><h1 style="font-family:Georgia,serif;font-size:30px;font-weight:400;margin:0 0 16px">${heading}</h1><p style="font-size:15px;line-height:1.6;margin:0 0 28px">${body}</p><a href="${actionUrl}" style="display:inline-block;background:#29251f;color:#fff;text-decoration:none;padding:13px 22px">${actionLabel}</a><p style="font-size:12px;line-height:1.5;color:#746d62;margin:28px 0 0">Jika Anda tidak meminta email ini, abaikan pesan ini.</p></div></div>`,
+      html: `<div style="background:#f5f1e8;padding:40px 16px;font-family:Arial,sans-serif;color:#29251f"><div style="max-width:560px;margin:auto;background:#fff;padding:36px;border:1px solid #ded9cf"><p style="font-size:12px;letter-spacing:.2em;margin:0 0 24px">IVORY</p><h1 style="font-family:Georgia,serif;font-size:30px;font-weight:400;margin:0 0 16px">${heading}</h1><p style="font-size:15px;line-height:1.6;margin:0 0 28px">${body}</p><a href="${actionUrl}" style="display:inline-block;background:#29251f;color:#fff;text-decoration:none;padding:13px 22px">${actionLabel}</a><p style="font-size:12px;line-height:1.5;color:#746d62;margin:28px 0 0">If you did not request this email, you can safely ignore it.</p></div></div>`,
     };
 
     if (this.provider === "gmail") {
