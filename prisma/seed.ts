@@ -89,8 +89,8 @@ async function main() {
     });
     const variant = await prisma.productVariant.upsert({
       where: { sku: `${item.product.sku}-DEFAULT` },
-      update: { productId: product.id, name: "Default", color: item.product.color, colorHex: item.product.colorHex, size: item.product.size, isActive: true },
-      create: { productId: product.id, sku: `${item.product.sku}-DEFAULT`, name: "Default", color: item.product.color, colorHex: item.product.colorHex, size: item.product.size, isActive: true },
+      update: { productId: product.id, name: "Default", color: item.product.color, colorHex: item.product.colorHex, size: item.product.size, weightInGrams: index === 1 ? 450 : 900, isActive: true },
+      create: { productId: product.id, sku: `${item.product.sku}-DEFAULT`, name: "Default", color: item.product.color, colorHex: item.product.colorHex, size: item.product.size, weightInGrams: index === 1 ? 450 : 900, isActive: true },
     });
     seededProductIds.push(product.id);
     seededVariantIds.push(variant.id);

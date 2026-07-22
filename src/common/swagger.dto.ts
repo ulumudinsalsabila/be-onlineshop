@@ -62,8 +62,8 @@ export class AddressRequestDto {
 }
 
 export class ShippingRatesRequestDto {
-  @ApiProperty({ pattern: "^\\d{5}$", example: "10220" }) postalCode!: string;
-  @ApiProperty({ type: [String], maxItems: 4, example: ["jne", "sicepat"] }) courierCodes!: string[];
+  @ApiProperty({ example: 501 }) destinationId!: number;
+  @ApiProperty({ example: "cmcart123456789" }) cartId!: string;
 }
 
 export class CheckoutAddressDto {
@@ -79,6 +79,7 @@ export class CheckoutAddressDto {
 }
 
 export class ShippingSelectionDto {
+  @ApiProperty({ example: 501 }) destinationId!: number;
   @ApiProperty({ example: "jne" }) courierCode!: string;
   @ApiProperty({ example: "REG" }) serviceCode!: string;
 }

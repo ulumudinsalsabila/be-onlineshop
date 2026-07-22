@@ -10,9 +10,10 @@ import { CheckoutModule } from "./checkout/checkout.module";
 import { SellerModule } from "./seller/seller.module";
 import { AdminModule } from "./admin/admin.module";
 import { RegionsModule } from "./regions/regions.module";
+import { ShippingModule } from "./shipping/shipping.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProductsModule, CommerceModule, AccountModule, CheckoutModule, SellerModule, AdminModule, RegionsModule],
+  imports: [PrismaModule, AuthModule, ProductsModule, CommerceModule, AccountModule, ShippingModule, CheckoutModule, SellerModule, AdminModule, RegionsModule],
   controllers: [AppController],
 })
 export class AppModule {}

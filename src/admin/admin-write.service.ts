@@ -22,7 +22,7 @@ type Entity = keyof typeof entitySchemas;
 const productSchema = z.object({
   name: text(160), slug: text(100), baseSku: text(80), categoryId: text(100), brandId: text(100), description: text(10_000), shortDescription: optionalText(300), condition: z.enum(["NEW", "PRELOVED"]), conditionLabel: optionalText(80), completeness: optionalText(300), flawNotes: optionalText(2000), authenticationStatus: optionalText(100), price: money, compareAtPrice: money.optional().nullable(), costPrice: money.optional().nullable(), status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]), isFeatured: z.boolean(), isNewArrival: z.boolean(), weightGrams: z.coerce.number().int().positive().optional().nullable(),
   images: z.array(z.object({ id: z.string().optional(), url: text(500), alt: text(180), width: z.coerce.number().int().positive(), height: z.coerce.number().int().positive(), isPrimary: z.boolean() })).min(1).max(12),
-  variants: z.array(z.object({ id: z.string().optional(), sku: text(80), name: text(100), color: optionalText(60), colorHex: optionalText(20), size: optionalText(30), price: money.optional().nullable(), compareAtPrice: money.optional().nullable(), stock: z.coerce.number().int().nonnegative(), lowStockAt: z.coerce.number().int().nonnegative(), isActive: z.boolean() })).min(1).max(100),
+  variants: z.array(z.object({ id: z.string().optional(), sku: text(80), name: text(100), color: optionalText(60), colorHex: optionalText(20), size: optionalText(30), price: money.optional().nullable(), compareAtPrice: money.optional().nullable(), weightInGrams: z.coerce.number().int().positive().max(1_000_000), stock: z.coerce.number().int().nonnegative(), lowStockAt: z.coerce.number().int().nonnegative(), isActive: z.boolean() })).min(1).max(100),
 });
 
 @Injectable()
@@ -120,7 +120,22 @@ export class AdminWriteService {
     await this.audit(actorId, "UPDATE_ACCESS", "users", id); return user;
   }
 
-  async order(actorId: string, id: string, body: unknown) { const parsed = z.object({ status: z.enum(["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"]), paymentStatus: z.enum(["PENDING", "AUTHORIZED", "PAID", "FAILED", "EXPIRED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED"]).optional() }).safeParse(body); if (!parsed.success) apiException(400, "VALIDATION_ERROR", "Status order tidak valid."); const result = await this.prisma.order.update({ where: { id }, data: { ...parsed.data, cancelledAt: parsed.data.status === "CANCELLED" ? new Date() : undefined } }); await this.audit(actorId, "UPDATE_STATUS", "orders", id); return result; }
+  async order(actorId: string, id: string, body: unknown) {
+    const parsed = z.object({ status: z.enum(["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"]), paymentStatus: z.enum(["PENDING", "AUTHORIZED", "PAID", "FAILED", "EXPIRED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED"]).optional(), trackingNumber: z.string().trim().min(3).max(160).optional().nullable() }).safeParse(body);
+    if (!parsed.success) apiException(400, "VALIDATION_ERROR", "Status order atau nomor resi tidak valid.");
+    const existing = await this.prisma.order.findUnique({ where: { id }, include: { shipments: { orderBy: { createdAt: "desc" }, take: 1 } } });
+    if (!existing) apiException(404, "NOT_FOUND", "Order tidak ditemukan.");
+    const trackingNumber = parsed.data.trackingNumber ?? existing.trackingNumber;
+    if (parsed.data.status === "SHIPPED" && !trackingNumber) apiException(400, "TRACKING_REQUIRED", "Nomor resi wajib diisi sebelum order dikirim.");
+    const shippedAt = parsed.data.status === "SHIPPED" ? existing.shippedAt ?? new Date() : undefined;
+    const result = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.update({ where: { id }, data: { status: parsed.data.status, paymentStatus: parsed.data.paymentStatus, trackingNumber, shippedAt, cancelledAt: parsed.data.status === "CANCELLED" ? new Date() : undefined } });
+      const shipment = existing.shipments[0];
+      if (shipment) await tx.shipment.update({ where: { id: shipment.id }, data: { trackingNumber, status: parsed.data.status === "SHIPPED" ? "IN_TRANSIT" : parsed.data.status === "DELIVERED" ? "DELIVERED" : undefined, shippedAt, deliveredAt: parsed.data.status === "DELIVERED" ? new Date() : undefined } });
+      return order;
+    });
+    await this.audit(actorId, "UPDATE_STATUS", "orders", id); return result;
+  }
   async inventory(actorId: string, id: string, body: unknown) {
     const parsed = z.object({ quantity: z.coerce.number().int().nonnegative(), lowStockAt: z.coerce.number().int().nonnegative() }).safeParse(body);
     if (!parsed.success) apiException(400, "VALIDATION_ERROR", "Stok tidak valid.");
