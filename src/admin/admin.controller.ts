@@ -1,0 +1,4 @@
+import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common"; import { ApiBearerAuth, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger"; import { success } from "../common/http"; import { AdminGuard } from "./admin.guard"; import { AdminService } from "./admin.service";
+@ApiTags("Admin") @ApiCookieAuth("ivory_session") @ApiBearerAuth()
+@Controller("admin") @UseGuards(AdminGuard)
+export class AdminController { constructor(private readonly admin: AdminService) {} @Get("views/:view") @ApiOperation({ summary: "Get an admin dashboard data view" }) view(@Param("view") view: string, @Query() query: Record<string, string | undefined>) { return this.admin.view(view, query).then(success); } @Get("details/:resource/:id") @ApiOperation({ summary: "Get an admin resource detail" }) detail(@Param("resource") resource: string, @Param("id") id: string) { return this.admin.detail(resource, id).then(success); } }

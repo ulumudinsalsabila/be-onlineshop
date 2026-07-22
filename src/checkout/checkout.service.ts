@@ -1,0 +1,83 @@
+import { Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { Prisma } from "../../generated/prisma/client";
+import { apiException } from "../common/http";
+import { PrismaService } from "../common/prisma.service";
+
+type Address = { recipient: string; phone: string; line1: string; line2?: string | null; district: string; city: string; province: string; postalCode: string; country: string };
+type CheckoutInput = { addressId?: string; address?: Address; shipping: { courierCode: string; serviceCode: string }; voucherCode?: string; paymentMethod: "BANK_TRANSFER" | "CREDIT_CARD" | "E_WALLET" | "VIRTUAL_ACCOUNT"; notes?: string };
+type Line = { variantId: string; productName: string; productSlug: string; sku: string; variantName: string; color: string | null; size: string | null; imageUrl: string | null; unitPrice: Prisma.Decimal; compareAtPrice: Prisma.Decimal | null; quantity: number; stock: number; weightGrams: number | null };
+
+@Injectable()
+export class CheckoutService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async lines(userId: string) {
+    const cart = await this.prisma.cart.findUnique({ where: { activeKey: `user:${userId}` }, include: { items: { include: { variant: { include: { inventory: true, product: { include: { images: { where: { isPrimary: true }, take: 1 } } } } } } } } });
+    if (!cart?.items.length) apiException(409, "EMPTY_CART", "Keranjang Anda kosong.");
+    return { cart, lines: cart.items.map((item): Line => ({ variantId: item.variant.id, productName: item.variant.product.name, productSlug: item.variant.product.slug, sku: item.variant.sku, variantName: item.variant.name, color: item.variant.color, size: item.variant.size, imageUrl: item.variant.product.images[0]?.url ?? null, unitPrice: item.variant.price ?? item.variant.product.price, compareAtPrice: item.variant.compareAtPrice ?? item.variant.product.compareAtPrice, quantity: item.quantity, stock: Math.max(0, (item.variant.inventory?.quantity ?? 0) - (item.variant.inventory?.reserved ?? 0)), weightGrams: item.variant.product.weightGrams })) };
+  }
+
+  async context(userId: string) {
+    const [{ lines }, customer, addresses] = await Promise.all([this.lines(userId), this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true, phone: true } }), this.prisma.address.findMany({ where: { userId }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] })]);
+    return { customer, addresses, items: lines.map((line) => ({ ...line, unitPrice: line.unitPrice.toNumber(), compareAtPrice: line.compareAtPrice?.toNumber() ?? null })) };
+  }
+
+  async rates(userId: string, postalCode: string, courierCodes: string[]) {
+    const { lines } = await this.lines(userId);
+    const weight = lines.reduce((sum, line) => sum + (line.weightGrams ?? 1000) * line.quantity, 0);
+    const zone = Math.max(0, Number(postalCode.slice(0, 2)) % 5) * 2_000;
+    const catalog = { jne: ["JNE", "REG", 18_000, 2, 4], sicepat: ["SiCepat", "REG", 16_000, 2, 4], anteraja: ["AnterAja", "REG", 15_000, 3, 5], jnt: ["J&T", "EZ", 17_000, 2, 5] } as const;
+    return courierCodes.filter((code): code is keyof typeof catalog => code in catalog).map((code) => { const [name, service, base, min, max] = catalog[code]; return { provider: "mock", courierCode: code, courierName: name, serviceCode: service, serviceName: "Regular", cost: base + zone + Math.ceil(weight / 1000) * 2_000, estimateMinDays: min, estimateMaxDays: max, estimateLabel: `${min}-${max} days` }; });
+  }
+
+  private async address(userId: string, input: CheckoutInput): Promise<Address> {
+    if (input.addressId) { const found = await this.prisma.address.findFirst({ where: { id: input.addressId, userId } }); if (!found) apiException(404, "ADDRESS_NOT_FOUND", "Alamat tidak ditemukan."); return found; }
+    if (!input.address) apiException(400, "ADDRESS_REQUIRED", "Alamat wajib diisi.");
+    return input.address;
+  }
+
+  private totals(lines: Line[], shipping: number, voucher?: { type: string; value: Prisma.Decimal; minSpend: Prisma.Decimal | null; maxDiscount: Prisma.Decimal | null } | null) {
+    const subtotal = lines.reduce((sum, line) => { if (line.quantity > line.stock) apiException(409, "INSUFFICIENT_STOCK", "Stok salah satu produk tidak lagi mencukupi."); return sum.add(line.unitPrice.mul(line.quantity)); }, new Prisma.Decimal(0));
+    if (voucher?.minSpend && subtotal.lt(voucher.minSpend)) apiException(422, "VOUCHER_MIN_SPEND", "Belanja belum memenuhi minimum voucher.");
+    let productDiscount = new Prisma.Decimal(0); let shippingDiscount = new Prisma.Decimal(0);
+    if (voucher?.type === "PERCENTAGE") productDiscount = subtotal.mul(voucher.value).div(100);
+    if (voucher?.type === "FIXED_AMOUNT") productDiscount = voucher.value;
+    if (voucher?.type === "FREE_SHIPPING") shippingDiscount = Prisma.Decimal.min(shipping, voucher.value.isZero() ? shipping : voucher.value);
+    if (voucher?.maxDiscount) productDiscount = Prisma.Decimal.min(productDiscount, voucher.maxDiscount);
+    productDiscount = Prisma.Decimal.min(subtotal, productDiscount).toDecimalPlaces(2);
+    const shippingTotal = new Prisma.Decimal(shipping).sub(shippingDiscount).toDecimalPlaces(2); const discountTotal = productDiscount.add(shippingDiscount).toDecimalPlaces(2);
+    return { subtotal, discountTotal, shippingTotal, grandTotal: subtotal.add(shipping).sub(discountTotal).toDecimalPlaces(2) };
+  }
+
+  private async selection(userId: string, input: CheckoutInput) {
+    const address = await this.address(userId, input); const { cart, lines } = await this.lines(userId);
+    const quotes = await this.rates(userId, address.postalCode, [input.shipping.courierCode]);
+    const shipping = quotes.find((quote) => quote.courierCode === input.shipping.courierCode && quote.serviceCode.toLowerCase() === input.shipping.serviceCode.toLowerCase());
+    if (!shipping) apiException(409, "SHIPPING_OPTION_INVALID", "Layanan pengiriman tidak lagi tersedia.");
+    const now = new Date(); const voucher = input.voucherCode ? await this.prisma.voucher.findFirst({ where: { code: input.voucherCode, isActive: true, startsAt: { lte: now }, endsAt: { gte: now } } }) : null;
+    if (input.voucherCode && !voucher) apiException(422, "VOUCHER_INVALID", "Voucher tidak valid atau sudah berakhir.");
+    return { address, cart, lines, shipping, voucher, totals: this.totals(lines, shipping.cost, voucher) };
+  }
+
+  async preview(userId: string, input: CheckoutInput) {
+    const selected = await this.selection(userId, input); const t = selected.totals;
+    return { subtotal: t.subtotal.toNumber(), discountTotal: t.discountTotal.toNumber(), shippingTotal: t.shippingTotal.toNumber(), grandTotal: t.grandTotal.toNumber(), voucherCode: selected.voucher?.code ?? null, shipping: selected.shipping };
+  }
+
+  async create(userId: string, input: CheckoutInput) {
+    const selected = await this.selection(userId, input); const { address, shipping, voucher, totals } = selected;
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, phone: true } });
+      const cart = await tx.cart.findUniqueOrThrow({ where: { id: selected.cart.id }, include: { items: { include: { variant: { include: { inventory: true, product: true } } } } } });
+      for (const item of cart.items) { const inv = item.variant.inventory; if (!inv) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); const update = await tx.inventory.updateMany({ where: { id: inv.id, version: inv.version, quantity: { gte: inv.reserved + item.quantity } }, data: { reserved: { increment: item.quantity }, version: { increment: 1 } } }); if (update.count !== 1) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); }
+      const orderNumber = `IV-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`; const redirectUrl = `${process.env.FRONTEND_URL?.split(",")[0] ?? "http://localhost:3000"}/checkout/pending`;
+      const order = await tx.order.create({ data: { orderNumber, userId, customerEmail: user.email, customerName: user.name ?? address.recipient, customerPhone: user.phone ?? address.phone, shippingAddress: address, subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal, grandTotal: totals.grandTotal, voucherCode: voucher?.code, shippingMethod: `${shipping.courierCode}:${shipping.serviceCode}`, shippingEstimate: shipping.estimateLabel, notes: input.notes, items: { create: selected.lines.map((line) => ({ variantId: line.variantId, productName: line.productName, productSlug: line.productSlug, sku: line.sku, variantName: line.variantName, colorSnapshot: line.color, sizeSnapshot: line.size, imageUrlSnapshot: line.imageUrl, unitPrice: line.unitPrice, compareAtPrice: line.compareAtPrice, quantity: line.quantity, lineTotal: line.unitPrice.mul(line.quantity), productSnapshot: { variantId: line.variantId, sku: line.sku } })) }, payments: { create: { provider: process.env.MIDTRANS_SERVER_KEY ? "midtrans" : "mock", idempotencyKey: `checkout:${orderNumber}`, method: input.paymentMethod, amount: totals.grandTotal, redirectUrl } }, shipments: { create: { provider: shipping.provider, courier: shipping.courierCode, service: shipping.serviceCode, shippingCost: totals.shippingTotal, estimateMinDays: shipping.estimateMinDays, estimateMaxDays: shipping.estimateMaxDays, metadata: { quote: shipping } } } }, include: { payments: true } });
+      if (voucher) { await tx.voucherUsage.create({ data: { voucherId: voucher.id, userId, orderId: order.id, discountAmount: totals.discountTotal } }); await tx.voucher.update({ where: { id: voucher.id }, data: { usedCount: { increment: 1 } } }); }
+      await tx.cart.update({ where: { id: cart.id }, data: { status: "CONVERTED", activeKey: null } }); return order;
+    }, { isolationLevel: "Serializable", timeout: 20_000 });
+    return { orderId: result.id, orderNumber: result.orderNumber, redirectUrl: result.payments[0]?.redirectUrl, provider: result.payments[0]?.provider };
+  }
+}
+
+export type { CheckoutInput };
