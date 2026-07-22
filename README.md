@@ -21,6 +21,8 @@ Frontend harus memiliki `NEXT_PUBLIC_API_URL=http://localhost:4000/api`. Backend
 
 Konfigurasi Auth.js lama tidak dipakai oleh backend NestJS. Gunakan `JWT_SECRET` sebagai pengganti `AUTH_SECRET`, `FRONTEND_URL` sebagai pengganti `AUTH_URL`/`NEXT_PUBLIC_APP_URL`, dan `BACKEND_PUBLIC_URL` untuk URL publik API. Variable `NEXT_PUBLIC_*` tetap hanya berada di repository frontend.
 
+Pengiriman email mendukung dua provider. Atur `EMAIL_PROVIDER="gmail"` untuk Gmail SMTP dengan `GMAIL_USER` dan `GMAIL_APP_PASSWORD`, atau `EMAIL_PROVIDER="resend"` dengan `RESEND_API_KEY` dan `EMAIL_FROM`. Gmail wajib memakai App Password, bukan password login akun.
+
 Untuk request API langsung pada production, gunakan custom domain dengan induk yang sama, misalnya `shop.example.com` dan `api.example.com`, lalu set `COOKIE_DOMAIN=".example.com"`. Biarkan kosong saat frontend dan backend lokal sama-sama memakai hostname `localhost`. Domain acak `*.vercel.app` dari dua project berbeda tidak dapat berbagi cookie sesi dengan Server Components.
 
 ## Endpoint tahap pertama

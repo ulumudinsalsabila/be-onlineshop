@@ -29,8 +29,12 @@ Memakai subdomain dari domain utama yang sama membantu kompatibilitas cookie. Pr
 | `JWT_SECRET` | Ya | Secret acak minimal 32 karakter. |
 | `FRONTEND_URL` | Ya | Origin frontend tanpa trailing slash. Beberapa origin dapat dipisahkan koma. |
 | `BACKEND_PUBLIC_URL` | Production upload | URL publik API, misalnya `https://api.example.com`. |
-| `RESEND_API_KEY` | Ya | API key Resend; simpan hanya di secret manager backend. |
-| `EMAIL_FROM` | Ya | Pengirim dari domain yang sudah diverifikasi di Resend. |
+| `EMAIL_PROVIDER` | Ya | Pilih `gmail` atau `resend`. Default aplikasi adalah `gmail`. |
+| `GMAIL_USER` | Jika provider Gmail | Alamat Gmail/Google Workspace lengkap. |
+| `GMAIL_APP_PASSWORD` | Jika provider Gmail | App Password Google 16 digit; jangan gunakan password akun. |
+| `GMAIL_FROM_NAME` | Tidak | Nama pengirim Gmail, default `IVORY`. |
+| `RESEND_API_KEY` | Jika provider Resend | API key Resend; simpan hanya di secret manager backend. |
+| `EMAIL_FROM` | Jika provider Resend | Pengirim dari domain yang sudah diverifikasi di Resend. |
 | `MIDTRANS_SERVER_KEY` | Jika Midtrans aktif | Secret server Midtrans; jangan pernah dikirim ke frontend. |
 
 Contoh:
@@ -41,12 +45,24 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/ivory_store?sslmode=require"
 JWT_SECRET="secret-acak-minimal-32-karakter"
 FRONTEND_URL="https://shop.example.com"
 BACKEND_PUBLIC_URL="https://api.example.com"
-RESEND_API_KEY="re_xxxxxxxxx"
-EMAIL_FROM="IVORY <noreply@mail.example.com>"
+EMAIL_PROVIDER="gmail"
+GMAIL_USER="ivory.shop@gmail.com"
+GMAIL_APP_PASSWORD="app-password-16-digit"
+GMAIL_FROM_NAME="IVORY"
 MIDTRANS_SERVER_KEY=""
 ```
 
-Tambahkan domain di dashboard Resend, lalu pasang record SPF dan DKIM yang diberikan. Tanpa `RESEND_API_KEY`, development hanya mencetak tautan verifikasi/reset ke log; production menolak start agar kegagalan konfigurasi tidak tersembunyi.
+Untuk Gmail, aktifkan 2-Step Verification pada akun Google lalu buat App Password khusus aplikasi. SMTP menggunakan `smtp.gmail.com` port `465` dengan TLS. Alamat pengirim selalu mengikuti `GMAIL_USER`; `GMAIL_FROM_NAME` hanya mengubah nama tampilannya.
+
+Untuk tetap memakai Resend, ganti konfigurasi email menjadi:
+
+```dotenv
+EMAIL_PROVIDER="resend"
+RESEND_API_KEY="re_xxxxxxxxx"
+EMAIL_FROM="IVORY <noreply@mail.example.com>"
+```
+
+Tambahkan domain di dashboard Resend, lalu pasang record SPF dan DKIM yang diberikan. Jika kredensial provider terpilih kosong, development hanya mencetak tautan verifikasi/reset ke log; production menolak start agar kegagalan konfigurasi tidak tersembunyi.
 
 `FRONTEND_URL` diperiksa secara exact untuk mutation request. Jangan memasukkan path atau trailing slash. Untuk staging:
 
