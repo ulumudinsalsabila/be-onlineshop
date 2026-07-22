@@ -61,8 +61,9 @@ export class ShippingService {
   private couriers(): string[] { const values = (process.env.RAJAONGKIR_COURIERS || "jne:sicepat:jnt:tiki:anteraja:pos").split(":").map((value) => value.trim().toLowerCase()).filter((value) => /^[a-z0-9_-]+$/.test(value)); if (!values.length) apiException(503, "SHIPPING_NOT_CONFIGURED", "Daftar kurir belum dikonfigurasi."); return [...new Set(values)]; }
 
   private async request(url: URL, init: RequestInit): Promise<unknown> {
+    const apiKey = this.apiKey();
     let response: Response;
-    try { response = await fetch(url, { ...init, headers: { ...Object.fromEntries(new Headers(init.headers).entries()), key: this.apiKey(), Accept: "application/json" }, signal: AbortSignal.timeout(8_000) }); }
+    try { response = await fetch(url, { ...init, headers: { ...Object.fromEntries(new Headers(init.headers).entries()), key: apiKey, Accept: "application/json" }, signal: AbortSignal.timeout(8_000) }); }
     catch (error) { if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) apiException(504, "SHIPPING_TIMEOUT", "RajaOngkir tidak merespons tepat waktu. Silakan coba lagi."); apiException(502, "SHIPPING_UPSTREAM_ERROR", "Layanan ongkir sedang tidak dapat dihubungi."); }
     let payload: unknown = null; try { payload = await response.json() as unknown; } catch { /* handled as an invalid upstream response below */ }
     if (response.status === 429) apiException(429, "SHIPPING_QUOTA_EXCEEDED", "Kuota RajaOngkir telah habis atau terlalu banyak permintaan.");
