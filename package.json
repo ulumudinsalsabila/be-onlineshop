@@ -1,0 +1,41 @@
+{
+  "name": "toko-online-backend",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "prisma generate && nest build",
+    "start": "node dist/src/main.js",
+    "start:dev": "nest start --watch",
+    "lint": "prisma generate && eslint src --max-warnings=0",
+    "type-check": "prisma generate && tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.1",
+    "@nestjs/platform-express": "^11.1.6",
+    "@node-rs/argon2": "^2.0.2",
+    "@prisma/adapter-pg": "^6.19.3",
+    "@prisma/client": "^6.19.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.3",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.5",
+    "@types/node": "^22.19.1",
+    "eslint": "^9.39.1",
+    "prisma": "^6.19.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1"
+  }
+}
