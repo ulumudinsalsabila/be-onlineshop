@@ -25,6 +25,8 @@ Pengiriman email mendukung dua provider. Atur `EMAIL_PROVIDER="gmail"` untuk Gma
 
 Payment menggunakan Midtrans Snap. Gunakan `MIDTRANS_IS_PRODUCTION="false"` dengan Sandbox Server Key untuk development dan ubah ke `true` hanya bersama Production Server Key. Webhook publiknya adalah `POST /api/payments/midtrans/notification`; status customer dapat direkonsiliasi lewat `POST /api/payments/:orderId/sync`.
 
+Shipping menggunakan Biteship Rates, Orders, Tracking, dan Webhook API. Gunakan `BITESHIP_IS_PRODUCTION="false"` bersama `BITESHIP_API_KEY_TEST` untuk development; live key hanya dipilih saat nilainya `true`. Shipment dibuat otomatis setelah pembayaran berstatus `PAID`. Webhook publiknya adalah `POST /api/shipments/biteship/webhook`, sedangkan customer dapat membaca dan menyinkronkan tracking melalui `GET /api/orders/:orderId/tracking` dan `POST /api/orders/:orderId/tracking/sync`.
+
 Untuk request API langsung pada production, gunakan custom domain dengan induk yang sama, misalnya `shop.example.com` dan `api.example.com`, lalu set `COOKIE_DOMAIN=".example.com"`. Biarkan kosong saat frontend dan backend lokal sama-sama memakai hostname `localhost`. Domain acak `*.vercel.app` dari dua project berbeda tidak dapat berbagi cookie sesi dengan Server Components.
 
 ## Endpoint tahap pertama

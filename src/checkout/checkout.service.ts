@@ -4,6 +4,7 @@ import { Prisma } from "../../generated/prisma/client";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
 import { MidtransService } from "./midtrans.service";
+import { BiteshipService } from "../shipping/biteship.service";
 
 type Address = { recipient: string; phone: string; line1: string; line2?: string | null; district: string; city: string; province: string; postalCode: string; country: string };
 type CheckoutInput = { addressId?: string; address?: Address; shipping: { courierCode: string; serviceCode: string }; voucherCode?: string; paymentMethod: "BANK_TRANSFER" | "CREDIT_CARD" | "E_WALLET" | "VIRTUAL_ACCOUNT"; notes?: string };
@@ -11,7 +12,7 @@ type Line = { variantId: string; productName: string; productSlug: string; sku: 
 
 @Injectable()
 export class CheckoutService {
-  constructor(private readonly prisma: PrismaService, private readonly midtrans: MidtransService) {}
+  constructor(private readonly prisma: PrismaService, private readonly midtrans: MidtransService, private readonly biteship: BiteshipService) {}
 
   private async lines(userId: string) {
     const cart = await this.prisma.cart.findUnique({ where: { activeKey: `user:${userId}` }, include: { items: { include: { variant: { include: { inventory: true, product: { include: { images: { where: { isPrimary: true }, take: 1 } } } } } } } } });
@@ -26,10 +27,7 @@ export class CheckoutService {
 
   async rates(userId: string, postalCode: string, courierCodes: string[]) {
     const { lines } = await this.lines(userId);
-    const weight = lines.reduce((sum, line) => sum + (line.weightGrams ?? 1000) * line.quantity, 0);
-    const zone = Math.max(0, Number(postalCode.slice(0, 2)) % 5) * 2_000;
-    const catalog = { jne: ["JNE", "REG", 18_000, 2, 4], sicepat: ["SiCepat", "REG", 16_000, 2, 4], anteraja: ["AnterAja", "REG", 15_000, 3, 5], jnt: ["J&T", "EZ", 17_000, 2, 5] } as const;
-    return courierCodes.filter((code): code is keyof typeof catalog => code in catalog).map((code) => { const [name, service, base, min, max] = catalog[code]; return { provider: "mock", courierCode: code, courierName: name, serviceCode: service, serviceName: "Regular", cost: base + zone + Math.ceil(weight / 1000) * 2_000, estimateMinDays: min, estimateMaxDays: max, estimateLabel: `${min}-${max} days` }; });
+    return this.biteship.rates(lines, postalCode, courierCodes);
   }
 
   private async address(userId: string, input: CheckoutInput): Promise<Address> {
@@ -73,7 +71,7 @@ export class CheckoutService {
       const cart = await tx.cart.findUniqueOrThrow({ where: { id: selected.cart.id }, include: { items: { include: { variant: { include: { inventory: true, product: true } } } } } });
       for (const item of cart.items) { const inv = item.variant.inventory; if (!inv) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); const update = await tx.inventory.updateMany({ where: { id: inv.id, version: inv.version, quantity: { gte: inv.reserved + item.quantity } }, data: { reserved: { increment: item.quantity }, version: { increment: 1 } } }); if (update.count !== 1) apiException(409, "INSUFFICIENT_STOCK", "Stok tidak mencukupi."); }
       const orderNumber = `IV-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`;
-      const order = await tx.order.create({ data: { orderNumber, userId, customerEmail: user.email, customerName: user.name ?? address.recipient, customerPhone: user.phone ?? address.phone, shippingAddress: address, subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal, grandTotal: totals.grandTotal, voucherCode: voucher?.code, shippingMethod: `${shipping.courierCode}:${shipping.serviceCode}`, shippingEstimate: shipping.estimateLabel, notes: input.notes, items: { create: selected.lines.map((line) => ({ variantId: line.variantId, productName: line.productName, productSlug: line.productSlug, sku: line.sku, variantName: line.variantName, colorSnapshot: line.color, sizeSnapshot: line.size, imageUrlSnapshot: line.imageUrl, unitPrice: line.unitPrice, compareAtPrice: line.compareAtPrice, quantity: line.quantity, lineTotal: line.unitPrice.mul(line.quantity), productSnapshot: { variantId: line.variantId, sku: line.sku } })) }, payments: { create: { provider: "midtrans", idempotencyKey: `checkout:${orderNumber}`, method: input.paymentMethod, amount: totals.grandTotal } }, shipments: { create: { provider: shipping.provider, courier: shipping.courierCode, service: shipping.serviceCode, shippingCost: totals.shippingTotal, estimateMinDays: shipping.estimateMinDays, estimateMaxDays: shipping.estimateMaxDays, metadata: { quote: shipping } } } }, include: { payments: true, items: true } });
+      const order = await tx.order.create({ data: { orderNumber, userId, customerEmail: user.email, customerName: user.name ?? address.recipient, customerPhone: user.phone ?? address.phone, shippingAddress: address, subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal, grandTotal: totals.grandTotal, voucherCode: voucher?.code, shippingMethod: `${shipping.courierCode}:${shipping.serviceCode}`, shippingEstimate: shipping.estimateLabel, notes: input.notes, items: { create: selected.lines.map((line) => ({ variantId: line.variantId, productName: line.productName, productSlug: line.productSlug, sku: line.sku, variantName: line.variantName, colorSnapshot: line.color, sizeSnapshot: line.size, imageUrlSnapshot: line.imageUrl, unitPrice: line.unitPrice, compareAtPrice: line.compareAtPrice, quantity: line.quantity, lineTotal: line.unitPrice.mul(line.quantity), productSnapshot: { variantId: line.variantId, sku: line.sku, weightGrams: line.weightGrams ?? 1000 } })) }, payments: { create: { provider: "midtrans", idempotencyKey: `checkout:${orderNumber}`, method: input.paymentMethod, amount: totals.grandTotal } }, shipments: { create: { provider: "biteship", courier: shipping.courierCode, service: shipping.serviceCode, shippingCost: totals.shippingTotal, estimateMinDays: shipping.estimateMinDays, estimateMaxDays: shipping.estimateMaxDays, metadata: { quote: shipping, environment: shipping.environment, history: [] } } } }, include: { payments: true, items: true } });
       if (voucher) { await tx.voucherUsage.create({ data: { voucherId: voucher.id, userId, orderId: order.id, discountAmount: totals.discountTotal } }); await tx.voucher.update({ where: { id: voucher.id }, data: { usedCount: { increment: 1 } } }); }
       await tx.cart.update({ where: { id: cart.id }, data: { status: "CONVERTED", activeKey: null } }); return order;
     }, { isolationLevel: "Serializable", timeout: 20_000 });

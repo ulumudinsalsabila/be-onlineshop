@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Prisma } from "../../generated/prisma/client";
 import { apiException } from "../common/http";
 import { PrismaService } from "../common/prisma.service";
+import { BiteshipService } from "../shipping/biteship.service";
 
 type PaymentMethod = "BANK_TRANSFER" | "CREDIT_CARD" | "E_WALLET" | "VIRTUAL_ACCOUNT";
 type LocalPaymentStatus = "PENDING" | "AUTHORIZED" | "PAID" | "FAILED" | "EXPIRED" | "CANCELLED" | "REFUNDED" | "PARTIALLY_REFUNDED";
@@ -40,7 +41,7 @@ export class MidtransService {
   private readonly production = booleanEnvironment("MIDTRANS_IS_PRODUCTION", false);
   private readonly expiryMinutes = positiveInteger(process.env.MIDTRANS_PAYMENT_EXPIRY_MINUTES, 60, 5, 1440);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(private readonly prisma: PrismaService, private readonly biteship: BiteshipService) {
     if (process.env.NODE_ENV === "production" && !this.serverKey) throw new Error("MIDTRANS_SERVER_KEY is required in production.");
     if (process.env.NODE_ENV === "production" && process.env.MIDTRANS_IS_PRODUCTION === undefined) throw new Error("MIDTRANS_IS_PRODUCTION must be set explicitly in production.");
     if (this.production && this.serverKey?.startsWith("SB-")) throw new Error("A Sandbox MIDTRANS_SERVER_KEY cannot be used when MIDTRANS_IS_PRODUCTION=true.");
@@ -130,7 +131,7 @@ export class MidtransService {
   private async applyStatus(payload: StatusPayload, source: "notification" | "status_api") {
     const nextStatus = localStatus(payload.transaction_status, payload.fraud_status);
     const eventKey = `midtrans:${payload.transaction_id ?? payload.order_id}:${payload.transaction_status}:${payload.status_code}`;
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({ where: { provider: "midtrans", order: { orderNumber: payload.order_id } }, include: { order: { include: { items: true } } } });
       if (!payment) apiException(404, "PAYMENT_NOT_FOUND", "Pembayaran Midtrans tidak ditemukan.");
       if (!new Prisma.Decimal(payload.gross_amount).equals(payment.amount)) apiException(400, "PAYMENT_AMOUNT_MISMATCH", "Nominal notification tidak sesuai dengan order.");
@@ -157,6 +158,11 @@ export class MidtransService {
       this.logger.log(`Midtrans ${source} applied; order=${payload.order_id} status=${appliedStatus}`);
       return { orderId: payment.orderId, status: appliedStatus, duplicate: false };
     }, { isolationLevel: "Serializable", timeout: 20_000 });
+    if (result.status === "PAID") {
+      try { await this.biteship.bookPaidOrder(result.orderId); }
+      catch (error) { this.logger.error(`Biteship booking deferred; order=${result.orderId} error=${error instanceof Error ? error.message : "unknown error"}`); }
+    }
+    return result;
   }
 
   private async midtransRequest(api: "snap" | "core", path: string, init: RequestInit) {
